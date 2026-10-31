@@ -14,6 +14,7 @@ Guidance for Claude (or any AI assistant) working in this repository.
 - Every app needs a level (Safe / Caution / Critical) and an `Effect` saying what stops working. If unsure, use Caution.
 - Build with `.\build.ps1`, then run `tests\Test-Fastyourpc.ps1`. It uses `--test-root`, so real settings are never touched. Never test by uninstalling real apps or writing real keys.
 - Antivirus: keep it plain. No packers, obfuscation, network code, hidden PowerShell/cmd, or self-elevation without a user click. Never try to evade detection. Fix false positives with code signing and vendor submissions (see TECHNICAL.md).
+- UI changes: check them by looking, not guessing. Run `Fastyourpc.exe --test-root Software\FastyourpcShot --theme light|dark --screenshot out.png <page>`, view the PNG, then delete the test key. Use only `Theme` colours and `S()` sizes. Draw text with `TextFormatFlags.NoPrefix`, otherwise "&" disappears.
 - `dist/`, `bin/` and `obj/` are not committed. The EXE goes in a GitHub Release with its SHA-256.
 
 ## PowerShell scripts layout

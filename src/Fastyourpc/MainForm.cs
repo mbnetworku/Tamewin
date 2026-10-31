@@ -5,308 +5,491 @@ using System.Drawing;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using static Fastyourpc.Theme;
 
 namespace Fastyourpc
 {
+    /// <summary>Main window: sidebar on the left, one page shown at a time on the right.</summary>
     public sealed class MainForm : Form
     {
         readonly Engine engine;
-        readonly ListView tweakList = NewList();
-        readonly ListView appList = NewList();
-        readonly Label tweakInfo = NewInfo();
-        readonly Label appInfo = NewInfo();
-        readonly TextBox log = new TextBox
+        readonly Panel pageHost = new Panel { Dock = DockStyle.Fill, Margin = Padding.Empty };
+        readonly Label status = new Label
+        {
+            Dock = DockStyle.Fill, AutoSize = false, TextAlign = ContentAlignment.MiddleLeft, AutoEllipsis = true,
+            Padding = new Padding(S(30), 0, S(30), 0), Margin = Padding.Empty,
+        };
+        readonly TextBox logBox = new TextBox
         {
             Dock = DockStyle.Fill, Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Vertical,
-            Font = new Font("Consolas", 9f), BackColor = SystemColors.Window,
+            BorderStyle = BorderStyle.None, Font = new Font("Consolas", 9.5f),
         };
-        bool busy;
+        readonly List<(NavItem nav, Control page)> pages = new List<(NavItem, Control)>();
+        readonly TweakPage privacyPage, featuresPage;
+        readonly AppsPage appsPage;
 
-        public MainForm(Engine engine)
+        readonly bool showTestLabel;
+
+        /// <param name="showTestLabel">false hides "TEST MODE" (used for screenshots).</param>
+        public MainForm(Engine engine, bool showTestLabel = true)
         {
             this.engine = engine;
-            Text = "Fastyourpc " + Application.ProductVersion + (engine.TestMode ? "   [TEST MODE]" : "");
-            Font = SystemFonts.MessageBoxFont;
-            AutoScaleMode = AutoScaleMode.Dpi;
-            Size = new Size(980, 760);
-            MinimumSize = new Size(700, 500);
+            this.showTestLabel = showTestLabel;
+            AutoScaleMode = AutoScaleMode.None;
+            Font = Body;
+            BackColor = Window;
+            ForeColor = Theme.Text;
+            Text = "Fastyourpc" + (engine.TestMode && showTestLabel ? "  [TEST MODE]" : "");
+            Size = new Size(S(1160), S(800));
+            MinimumSize = new Size(S(860), S(580));
             StartPosition = FormStartPosition.CenterScreen;
+            status.Font = Theme.Desc;
+            status.ForeColor = TextDim;
+            logBox.BackColor = Card;
+            logBox.ForeColor = Theme.Text;
 
-            var tabs = new TabControl { Dock = DockStyle.Fill };
-            tabs.TabPages.Add(BuildTweakTab());
-            tabs.TabPages.Add(BuildAppTab());
-            tabs.SelectedIndexChanged += (s, e) => { if (tabs.SelectedIndex == 1 && appList.Items.Count == 0) ScanApps(); };
+            privacyPage = new TweakPage(engine, Log, "Privacy",
+                "Turn off what Windows, Office and Edge send to Microsoft. Revert puts back exactly what was there before.",
+                Catalog.Groups.Where(g => g != Catalog.Features));
+            featuresPage = new TweakPage(engine, Log, "Windows features",
+                "Classic right-click menu and Windows protected print mode.",
+                new[] { Catalog.Features },
+                new FlatButton("Restart Explorer", ButtonKind.Subtle, (s, e) => RestartExplorer()),
+                new FlatButton("Open printer settings", ButtonKind.Subtle,
+                    (s, e) => Process.Start(new ProcessStartInfo("ms-settings:printers") { UseShellExecute = true })));
+            appsPage = new AppsPage(Log);
 
-            var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 3 };
-            layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 130));
-            layout.Controls.Add(BuildAdminBar(), 0, 0);
-            layout.Controls.Add(tabs, 0, 1);
-            layout.Controls.Add(log, 0, 2);
-            Controls.Add(layout);
+            var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, Margin = Padding.Empty, BackColor = Window };
+            root.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, S(256)));
+            root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            root.Controls.Add(BuildSidebar(), 0, 0);
 
-            Log("Fastyourpc started. Nothing is changed until you click Apply or Uninstall.");
-            Log("Backups are kept in " + Engine.DataFolder);
-            RefreshTweaks();
+            var right = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2, Margin = Padding.Empty, BackColor = Window };
+            right.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            right.RowStyles.Add(new RowStyle(SizeType.Absolute, S(30)));
+            right.Controls.Add(pageHost, 0, 0);
+            right.Controls.Add(status, 0, 1);
+            root.Controls.Add(right, 1, 0);
+            Controls.Add(root);
+
+            Log("Ready. Nothing changes until you click Apply or Uninstall.");
+            ShowPage("privacy");
         }
 
-        // ================= common UI =================
-
-        static ListView NewList() => new ListView
+        protected override void OnHandleCreated(EventArgs e)
         {
-            Dock = DockStyle.Fill, View = View.Details, CheckBoxes = true, FullRowSelect = true,
-            ShowItemToolTips = true, HideSelection = false, ShowGroups = true,
-        };
-
-        static Label NewInfo() => new Label
-        {
-            Dock = DockStyle.Fill, AutoSize = false, Height = 48, Padding = new Padding(4),
-            Text = "Click an item to see what it does.",
-        };
-
-        static Button Btn(string text, EventHandler onClick)
-        {
-            var b = new Button { Text = text, AutoSize = true, Margin = new Padding(3), Padding = new Padding(6, 2, 6, 2) };
-            b.Click += onClick;
-            return b;
+            ApplyTitleBar(Handle);
+            base.OnHandleCreated(e);
         }
 
-        static TabPage Tab(string title, Control list, Control info, params Control[] buttons)
-        {
-            var bar = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, WrapContents = true };
-            bar.Controls.AddRange(buttons);
-            var t = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 3 };
-            t.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-            t.RowStyles.Add(new RowStyle(SizeType.Absolute, 52));
-            t.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            t.Controls.Add(list, 0, 0);
-            t.Controls.Add(info, 0, 1);
-            t.Controls.Add(bar, 0, 2);
-            var page = new TabPage(title);
-            page.Controls.Add(t);
-            return page;
-        }
+        // ---------------- sidebar ----------------
 
-        Control BuildAdminBar()
+        Control BuildSidebar()
         {
-            var bar = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, Padding = new Padding(4) };
-            var label = new Label { AutoSize = true, Margin = new Padding(3, 8, 12, 3) };
-            if (Engine.IsAdmin)
+            var bar = new TableLayoutPanel
             {
-                label.Text = "Running as Administrator: every option is available.";
-                bar.Controls.Add(label);
-            }
-            else
+                Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 4, BackColor = Theme.Sidebar,
+                Padding = new Padding(S(16), S(20), S(16), S(16)), Margin = Padding.Empty,
+            };
+            bar.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            bar.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            bar.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            bar.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+
+            var title = new Label
             {
-                label.Text = "Running as a normal user: options marked 'Administrator' are locked (grey).";
-                bar.Controls.Add(label);
-                bar.Controls.Add(Btn("Restart as Administrator", (s, e) =>
-                {
-                    try
-                    {
-                        Process.Start(new ProcessStartInfo(Application.ExecutablePath) { UseShellExecute = true, Verb = "runas" });
-                        Close();
-                    }
-                    catch { Log("Administrator restart was cancelled."); }
-                }));
-            }
+                AutoSize = true, Text = "Fastyourpc", Font = AppTitle, ForeColor = Theme.Text,
+                Margin = new Padding(S(6), 0, 0, S(2)),
+            };
+            var version = new Label
+            {
+                AutoSize = true, Font = Small, ForeColor = TextDim, Margin = new Padding(S(7), 0, 0, S(22)),
+                Text = "Version " + Application.ProductVersion + (engine.TestMode && showTestLabel ? "  -  TEST MODE" : ""),
+            };
+            var head = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.TopDown, WrapContents = false, Margin = Padding.Empty };
+            head.Controls.Add(title);
+            head.Controls.Add(version);
+            bar.Controls.Add(head, 0, 0);
+
+            var navList = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.TopDown, WrapContents = false, Margin = Padding.Empty };
+            AddPage(navList, "privacy", IconShield, "Privacy", privacyPage);
+            AddPage(navList, "features", IconSettings, "Windows features", featuresPage);
+            AddPage(navList, "apps", IconApps, "Apps (bloatware)", appsPage);
+            AddPage(navList, "log", IconHistory, "Activity", BuildLogPage());
+            bar.Controls.Add(navList, 0, 1);
+
+            bar.Controls.Add(BuildAdminCard(), 0, 3);
             return bar;
+        }
+
+        void AddPage(FlowLayoutPanel navList, string key, string glyph, string text, Control page)
+        {
+            var nav = new NavItem(glyph, text) { Tag = key };
+            nav.Click += (s, e) => ShowPage(key);
+            navList.Controls.Add(nav);
+            page.Visible = false;
+            pageHost.Controls.Add(page);
+            pages.Add((nav, page));
+        }
+
+        public void ShowPage(string key)
+        {
+            foreach (var (nav, page) in pages)
+            {
+                bool on = (string)nav.Tag == key;
+                nav.Selected = on;
+                page.Visible = on;
+            }
+            if (key == "apps") appsPage.ScanIfNeeded();
+            if (key == "privacy") privacyPage.RefreshStates();
+            if (key == "features") featuresPage.RefreshStates();
+        }
+
+        Control BuildAdminCard()
+        {
+            var card = new FlowLayoutPanel
+            {
+                AutoSize = true, FlowDirection = FlowDirection.TopDown, WrapContents = false,
+                BackColor = Card, Padding = new Padding(S(14)), Margin = Padding.Empty, Width = S(224),
+            };
+            card.Controls.Add(new Label
+            {
+                AutoSize = true, Font = BodyBold, ForeColor = Theme.Text, Margin = new Padding(0, 0, 0, S(4)),
+                Text = Engine.IsAdmin ? "Administrator" : "Standard user",
+            });
+            card.Controls.Add(new Label
+            {
+                AutoSize = true, MaximumSize = new Size(S(196), 0), Font = Theme.Desc, ForeColor = TextDim,
+                Margin = new Padding(0, 0, 0, Engine.IsAdmin ? 0 : S(10)),
+                Text = Engine.IsAdmin
+                    ? "Every option is available."
+                    : "Options marked 'Needs admin' are locked. Restart as Administrator to use them.",
+            });
+            if (!Engine.IsAdmin)
+                card.Controls.Add(new FlatButton("Restart as admin", ButtonKind.Secondary, (s, e) => RestartAsAdmin(), IconAdmin)
+                    { Margin = Padding.Empty });
+            return card;
+        }
+
+        void RestartAsAdmin()
+        {
+            try
+            {
+                Process.Start(new ProcessStartInfo(Application.ExecutablePath) { UseShellExecute = true, Verb = "runas" });
+                Close();
+            }
+            catch { Log("Restart as Administrator was cancelled."); }
+        }
+
+        // ---------------- activity page ----------------
+
+        Control BuildLogPage()
+        {
+            var holder = new Panel { Dock = DockStyle.Fill, BackColor = Window, Padding = new Padding(S(30), S(4), S(30), S(16)), Margin = Padding.Empty };
+            var frame = new Panel { Dock = DockStyle.Fill, BackColor = Card, Padding = new Padding(S(12)) };
+            frame.Controls.Add(logBox);
+            holder.Controls.Add(frame);
+            var page = new PageLayout("Activity", "Everything this app changed in this session.", holder);
+            page.Footer.Summary.Text = "Backups and the list of removed apps are kept in " + Engine.DataFolder;
+            page.Footer.Buttons.Controls.Add(new FlatButton("Open data folder", ButtonKind.Secondary, (s, e) =>
+            {
+                System.IO.Directory.CreateDirectory(Engine.DataFolder);
+                Process.Start(new ProcessStartInfo(Engine.DataFolder) { UseShellExecute = true });
+            }));
+            return page;
         }
 
         void Log(string line)
         {
-            log.AppendText(DateTime.Now.ToString("HH:mm:ss") + "  " + line + Environment.NewLine);
-        }
-
-        static void SetChecked(ListView list, Func<ListViewItem, bool> pick)
-        {
-            foreach (ListViewItem i in list.Items) i.Checked = pick(i);
-        }
-
-        // ================= Privacy & settings tab =================
-
-        TabPage BuildTweakTab()
-        {
-            tweakList.Columns.Add("Setting", 520);
-            tweakList.Columns.Add("Status", 110);
-            tweakList.Columns.Add("Needs", 120);
-            foreach (var g in Catalog.Groups) tweakList.Groups.Add(g, g);
-            foreach (var t in Catalog.All)
-            {
-                var item = new ListViewItem(t.Title) { Tag = t, Group = tweakList.Groups[t.Group], ToolTipText = t.Info };
-                item.SubItems.Add("");
-                item.SubItems.Add(t.Admin ? "Administrator" : "");
-                tweakList.Items.Add(item);
-            }
-            tweakList.ItemCheck += (s, e) =>
-            {
-                var t = (Tweak)tweakList.Items[e.Index].Tag;
-                if (!engine.CanRun(t)) e.NewValue = CheckState.Unchecked;
-            };
-            tweakList.SelectedIndexChanged += (s, e) =>
-            {
-                if (tweakList.SelectedItems.Count == 0) return;
-                var t = (Tweak)tweakList.SelectedItems[0].Tag;
-                tweakInfo.Text = t.Info + (t.Warning != null ? "  WARNING: " + t.Warning : "") +
-                                 (t.Note != null ? "  (" + t.Note + ")" : "");
-            };
-
-            return Tab("Privacy & settings", tweakList, tweakInfo,
-                Btn("Apply selected", (s, e) => RunTweaks(apply: true)),
-                Btn("Revert selected", (s, e) => RunTweaks(apply: false)),
-                Btn("Select recommended", (s, e) => SetChecked(tweakList, i => !((Tweak)i.Tag).OptIn && engine.CanRun((Tweak)i.Tag))),
-                Btn("Select applied", (s, e) => SetChecked(tweakList, i => engine.State((Tweak)i.Tag) != TweakState.NotApplied && engine.CanRun((Tweak)i.Tag))),
-                Btn("Select none", (s, e) => SetChecked(tweakList, i => false)),
-                Btn("Refresh", (s, e) => RefreshTweaks()),
-                Btn("Open printer settings", (s, e) => Process.Start(new ProcessStartInfo("ms-settings:printers") { UseShellExecute = true })),
-                Btn("Restart Explorer", (s, e) => RestartExplorer()));
-        }
-
-        void RefreshTweaks()
-        {
-            foreach (ListViewItem item in tweakList.Items)
-            {
-                var t = (Tweak)item.Tag;
-                var state = engine.State(t);
-                item.SubItems[1].Text = state == TweakState.Applied ? "Applied" : state == TweakState.Partly ? "Partly" : "Not applied";
-                item.ForeColor = engine.CanRun(t) ? SystemColors.WindowText : SystemColors.GrayText;
-            }
-        }
-
-        void RunTweaks(bool apply)
-        {
-            var chosen = tweakList.CheckedItems.Cast<ListViewItem>().Select(i => (Tweak)i.Tag).ToList();
-            if (chosen.Count == 0) { MessageBox.Show(this, "Tick at least one setting first.", Text); return; }
-
-            var verb = apply ? "Apply" : "Revert";
-            var msg = verb + " " + chosen.Count + " setting(s)?";
-            var warnings = apply ? chosen.Where(t => t.Warning != null).Select(t => "- " + t.Title + ": " + t.Warning).ToList() : new List<string>();
-            if (warnings.Count > 0) msg += "\n\nWARNING:\n" + string.Join("\n", warnings);
-            if (apply && chosen.Any(t => t.Id == "wpp_on") && chosen.Any(t => t.Id == "wpp_off"))
-            {
-                MessageBox.Show(this, "Choose either protected print ON or OFF, not both.", Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return;
-            }
-            if (MessageBox.Show(this, msg, Text, MessageBoxButtons.YesNo,
-                    warnings.Count > 0 ? MessageBoxIcon.Warning : MessageBoxIcon.Question) != DialogResult.Yes) return;
-
-            foreach (var t in chosen)
-                if (apply) engine.Apply(t, Log); else engine.Revert(t, Log);
-            RefreshTweaks();
-            SetChecked(tweakList, i => false);
-
-            var notes = chosen.Where(t => t.Note != null).Select(t => t.Note).Distinct().ToList();
-            Log(verb + " finished." + (notes.Count > 0 ? " " + string.Join(". ", notes) + "." : ""));
-            if (notes.Count > 0) MessageBox.Show(this, "Done.\n\n" + string.Join("\n", notes), Text);
+            logBox.AppendText(DateTime.Now.ToString("HH:mm:ss") + "   " + line + Environment.NewLine);
+            status.Text = line;
         }
 
         void RestartExplorer()
         {
-            if (MessageBox.Show(this, "Restart Explorer now? Open File Explorer windows will close.", Text,
-                    MessageBoxButtons.YesNo) != DialogResult.Yes) return;
+            if (MessageBox.Show(this, "Restart Explorer now? Open File Explorer windows will close.", "Fastyourpc",
+                    MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
             foreach (var p in Process.GetProcessesByName("explorer")) { try { p.Kill(); p.WaitForExit(5000); } catch { } }
             System.Threading.Thread.Sleep(1500);
             if (Process.GetProcessesByName("explorer").Length == 0) Process.Start("explorer.exe");
             Log("Explorer restarted.");
         }
+    }
 
-        // ================= Apps (bloatware) tab =================
+    /// <summary>A page of tweaks from some catalog groups, with Apply / Revert.</summary>
+    sealed class TweakPage : PageLayout
+    {
+        readonly Engine engine;
+        readonly Action<string> log;
+        readonly List<OptionRow> rows = new List<OptionRow>();
+        readonly FlatButton applyBtn, revertBtn;
 
-        TabPage BuildAppTab()
+        public TweakPage(Engine engine, Action<string> log, string title, string subtitle, IEnumerable<string> groups,
+                         params FlatButton[] extraButtons) : base(title, subtitle)
         {
-            appList.Columns.Add("App", 300);
-            appList.Columns.Add("Status", 100);
-            appList.Columns.Add("If you remove it", 520);
-            foreach (AppLevel l in Enum.GetValues(typeof(AppLevel)))
-                appList.Groups.Add(l.ToString(), AppCatalog.LevelTitle(l));
+            this.engine = engine;
+            this.log = log;
 
-            appList.ItemCheck += (s, e) =>
-            {
-                if (e.NewValue != CheckState.Checked) return;
-                var row = (AppRow)appList.Items[e.Index].Tag;
-                if (!row.Installed) { e.NewValue = CheckState.Unchecked; return; }
-                if (row.Level == AppLevel.Critical && !busy &&
-                    MessageBox.Show(this,
-                        row.Name + " is CRITICAL.\n\n" + row.Effect +
-                        "\n\nRemoving it is NOT recommended. Select it anyway?",
-                        "Critical app", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) != DialogResult.Yes)
-                    e.NewValue = CheckState.Unchecked;
-            };
-            appList.SelectedIndexChanged += (s, e) =>
-            {
-                if (appList.SelectedItems.Count == 0) return;
-                var row = (AppRow)appList.SelectedItems[0].Tag;
-                appInfo.Text = row.Name + " - " + (row.Installed ? "installed" : "not installed") + ". " +
-                               AppCatalog.LevelTitle(row.Level) + ". If you remove it: " + row.Effect +
-                               (row.Installed ? "  Packages: " + string.Join(", ", row.Packages.Select(p => p.Id.Name)) : "");
-            };
+            var groupList = groups.ToList();
+            if (Catalog.All.Any(t => groupList.Contains(t.Group) && !t.OptIn))
+                Toolbar.Controls.Add(new FlatButton("Select recommended", ButtonKind.Subtle,
+                    (s, e) => SelectWhere(t => !t.OptIn)));
+            Toolbar.Controls.Add(new FlatButton("Select applied", ButtonKind.Subtle,
+                (s, e) => SelectWhere(t => engine.State(t) != TweakState.NotApplied)));
+            Toolbar.Controls.Add(new FlatButton("Clear selection", ButtonKind.Subtle, (s, e) => SelectWhere(t => false)));
+            Toolbar.Controls.AddRange(extraButtons);
 
-            return Tab("Apps (bloatware)", appList, appInfo,
-                Btn("Scan again", (s, e) => ScanApps()),
-                Btn("Uninstall selected", async (s, e) => await UninstallSelected()),
-                Btn("Select all safe", (s, e) => SetChecked(appList, i => ((AppRow)i.Tag).Installed && ((AppRow)i.Tag).Level == AppLevel.Safe)),
-                Btn("Select none", (s, e) => SetChecked(appList, i => false)),
-                Btn("Get highlighted app from Store", (s, e) =>
+            foreach (var group in groupList)
+            {
+                var tweaks = Catalog.All.Where(t => t.Group == group).ToList();
+                if (tweaks.Count == 0) continue;
+                if (groupList.Count > 1) List.Controls.Add(new SectionHeader(group));
+                foreach (var t in tweaks)
                 {
-                    if (appList.SelectedItems.Count == 0) { MessageBox.Show(this, "Click an app in the list first.", Text); return; }
-                    AppScanner.OpenInStore((AppRow)appList.SelectedItems[0].Tag);
-                }));
+                    var desc = t.Info;
+                    if (t.Warning != null) desc += "  Warning: " + t.Warning;
+                    if (t.Note != null) desc += "  (" + t.Note + ")";
+                    var row = new OptionRow { Title = t.Title, Description = desc, Item = t };
+                    if (t.Warning != null)
+                        row.ConfirmCheck = () => MessageBox.Show(FindForm(), t.Warning + "\n\nSelect it anyway?", t.Title,
+                            MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) == DialogResult.Yes;
+                    row.CheckedChanged += (s, e) => UpdateSummary();
+                    rows.Add(row);
+                    List.Controls.Add(row);
+                }
+            }
+
+            revertBtn = new FlatButton("Revert selected", ButtonKind.Secondary, (s, e) => Run(apply: false));
+            applyBtn = new FlatButton("Apply selected", ButtonKind.Primary, (s, e) => Run(apply: true));
+            Footer.Buttons.Controls.Add(applyBtn);
+            Footer.Buttons.Controls.Add(revertBtn);
+            RefreshStates();
         }
 
-        void ScanApps()
+        void SelectWhere(Func<Tweak, bool> pick)
         {
-            Log("Scanning installed apps...");
-            List<AppRow> rows;
-            try { rows = AppScanner.Scan(); }
-            catch (Exception ex) { Log("Scan failed: " + ex.Message); return; }
+            foreach (var r in rows) r.Checked = !r.Locked && pick((Tweak)r.Item);
+        }
 
-            busy = true;
-            appList.BeginUpdate();
-            appList.Items.Clear();
-            foreach (var row in rows.OrderBy(r => r.Level).ThenBy(r => !r.Installed).ThenBy(r => r.Name))
+        public void RefreshStates()
+        {
+            foreach (var row in rows)
             {
-                var item = new ListViewItem(row.Name) { Tag = row, Group = appList.Groups[row.Level.ToString()], ToolTipText = row.Effect };
-                item.SubItems.Add(row.Installed ? "Installed" : "Not installed");
-                item.SubItems.Add(row.Effect);
-                if (!row.Installed) item.ForeColor = SystemColors.GrayText;
-                else if (row.Level == AppLevel.Critical) item.ForeColor = Color.Firebrick;
-                appList.Items.Add(item);
+                var t = (Tweak)row.Item;
+                var state = engine.State(t);
+                row.Locked = !engine.CanRun(t);
+                if (row.Locked) row.Checked = false;
+                row.Pills.Clear();
+                if (t.Admin) row.Pills.Add(engine.CanRun(t) ? Blue("Admin") : Gray("Needs admin"));
+                row.Pills.Add(state == TweakState.Applied ? Green("Applied") : state == TweakState.Partly ? Amber("Partly") : Gray("Not applied"));
+                row.Invalidate();
             }
-            appList.EndUpdate();
-            busy = false;
+            List.PerformLayout();
+            UpdateSummary();
+        }
 
-            var known = rows.Where(r => r.Level != AppLevel.Other).ToList();
-            Log("Scan done: " + known.Count(r => r.Installed) + " of " + known.Count + " known apps installed (" +
+        void UpdateSummary()
+        {
+            int applied = rows.Count(r => engine.State((Tweak)r.Item) == TweakState.Applied);
+            int selected = rows.Count(r => r.Checked);
+            Footer.Summary.Text = applied + " of " + rows.Count + " applied     " + selected + " selected";
+            applyBtn.Enabled = revertBtn.Enabled = selected > 0;
+        }
+
+        void Run(bool apply)
+        {
+            var chosen = rows.Where(r => r.Checked).Select(r => (Tweak)r.Item).ToList();
+            if (chosen.Count == 0) return;
+            if (apply && chosen.Any(t => t.Id == "wpp_on") && chosen.Any(t => t.Id == "wpp_off"))
+            {
+                MessageBox.Show(FindForm(), "Choose either protected print ON or OFF, not both.", "Fastyourpc",
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+            var verb = apply ? "Apply" : "Revert";
+            if (MessageBox.Show(FindForm(), verb + " " + chosen.Count + " setting(s)?\n\n" +
+                    string.Join("\n", chosen.Select(t => "-  " + t.Title)), "Fastyourpc",
+                    MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
+
+            foreach (var t in chosen)
+                if (apply) engine.Apply(t, log); else engine.Revert(t, log);
+            SelectWhere(t => false);
+            RefreshStates();
+
+            var notes = chosen.Where(t => t.Note != null).Select(t => t.Note).Distinct().ToList();
+            log(verb + " finished: " + chosen.Count + " setting(s)." + (notes.Count > 0 ? " " + string.Join(". ", notes) + "." : ""));
+            if (notes.Count > 0)
+                MessageBox.Show(FindForm(), "Done.\n\n" + string.Join("\n", notes), "Fastyourpc", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+    }
+
+    /// <summary>Scans preinstalled apps and uninstalls the ones the user picks.</summary>
+    sealed class AppsPage : PageLayout
+    {
+        readonly Action<string> log;
+        readonly TextBox search = new TextBox { Width = S(280), BorderStyle = BorderStyle.FixedSingle, Font = Body };
+        readonly FlatButton showBtn, uninstallBtn, storeBtn;
+        readonly Dictionary<SectionHeader, List<OptionRow>> sections = new Dictionary<SectionHeader, List<OptionRow>>();
+        OptionRow highlighted;
+        bool installedOnly, scanned;
+
+        public AppsPage(Action<string> log) : base("Apps",
+            "Preinstalled apps on this PC. Click an app to see what stops working if you remove it.")
+        {
+            this.log = log;
+            search.BackColor = Card;
+            search.ForeColor = Theme.Text;
+            search.Margin = new Padding(S(4), S(6), S(12), S(4));
+            search.SetPlaceholder("Search apps");
+            search.TextChanged += (s, e) => ApplyFilter();
+
+            showBtn = new FlatButton("Show: all apps", ButtonKind.Subtle, (s, e) =>
+            {
+                installedOnly = !installedOnly;
+                showBtn.Text = installedOnly ? "Show: installed only" : "Show: all apps";
+                ApplyFilter();
+            });
+            Toolbar.Controls.Add(search);
+            Toolbar.Controls.Add(showBtn);
+            Toolbar.Controls.Add(new FlatButton("Select all safe", ButtonKind.Subtle,
+                (s, e) => ForRows(r => r.Checked = !r.Locked && ((AppRow)r.Item).Level == AppLevel.Safe)));
+            Toolbar.Controls.Add(new FlatButton("Clear selection", ButtonKind.Subtle, (s, e) => ForRows(r => r.Checked = false)));
+            Toolbar.Controls.Add(new FlatButton("Scan again", ButtonKind.Subtle, (s, e) => Scan()));
+
+            uninstallBtn = new FlatButton("Uninstall selected", ButtonKind.Primary, async (s, e) => await UninstallSelected());
+            storeBtn = new FlatButton("Get from Store", ButtonKind.Secondary, (s, e) =>
+            {
+                if (highlighted != null) AppScanner.OpenInStore((AppRow)highlighted.Item);
+            });
+            Footer.Buttons.Controls.Add(uninstallBtn);
+            Footer.Buttons.Controls.Add(storeBtn);
+            UpdateSummary();
+        }
+
+        void ForRows(Action<OptionRow> a) { foreach (var r in sections.Values.SelectMany(x => x)) a(r); }
+
+        public void ScanIfNeeded() { if (!scanned) Scan(); }
+
+        public void Scan()
+        {
+            scanned = true;
+            log("Scanning installed apps...");
+            List<AppRow> found;
+            try { found = AppScanner.Scan(); }
+            catch (Exception ex) { log("Scan failed: " + ex.Message); return; }
+
+            highlighted = null;
+            List.SuspendLayout();
+            foreach (Control c in List.Controls.Cast<Control>().ToList()) c.Dispose();
+            sections.Clear();
+
+            foreach (var level in found.Select(r => r.Level).Distinct().OrderBy(l => l))
+            {
+                var inLevel = found.Where(r => r.Level == level).OrderBy(r => !r.Installed).ThenBy(r => r.Name).ToList();
+                var header = new SectionHeader(AppCatalog.LevelTitle(level))
+                {
+                    Count = level == AppLevel.Other
+                        ? inLevel.Count + " installed"
+                        : inLevel.Count(r => r.Installed) + " of " + inLevel.Count + " installed",
+                };
+                List.Controls.Add(header);
+                var list = new List<OptionRow>();
+                foreach (var app in inLevel)
+                {
+                    var row = new OptionRow { Title = app.Name, Description = app.Effect, Item = app, Locked = !app.Installed };
+                    if (app.Level == AppLevel.Critical) row.Pills.Add(Red("Critical"));
+                    else if (app.Level == AppLevel.Caution) row.Pills.Add(Amber("Think first"));
+                    else if (app.Level == AppLevel.Safe) row.Pills.Add(Blue("Safe"));
+                    row.Pills.Add(app.Installed ? Green("Installed") : Gray("Not installed"));
+                    if (app.Level == AppLevel.Critical)
+                        row.ConfirmCheck = () => MessageBox.Show(FindForm(),
+                            app.Name + " is CRITICAL.\n\nIf you remove it: " + app.Effect +
+                            "\n\nRemoving it is NOT recommended. Select it anyway?", "Critical app",
+                            MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) == DialogResult.Yes;
+                    row.CheckedChanged += (s, e) => UpdateSummary();
+                    row.Activated += (s, e) =>
+                    {
+                        if (highlighted != null) highlighted.Highlighted = false;
+                        highlighted = row;
+                        row.Highlighted = true;
+                        UpdateSummary();
+                    };
+                    list.Add(row);
+                    List.Controls.Add(row);
+                }
+                sections[header] = list;
+            }
+            List.ResumeLayout();
+            ApplyFilter();
+
+            var known = found.Where(r => r.Level != AppLevel.Other).ToList();
+            log("Scan done: " + known.Count(r => r.Installed) + " of " + known.Count + " known apps installed (" +
                 known.Count(r => r.Installed && r.Level == AppLevel.Safe) + " safe to remove), " +
-                rows.Count(r => r.Level == AppLevel.Other) + " other apps.");
+                found.Count(r => r.Level == AppLevel.Other) + " other apps.");
+        }
+
+        void ApplyFilter()
+        {
+            var text = search.Text.Trim();
+            List.SuspendLayout();
+            foreach (var kv in sections)
+            {
+                bool any = false;
+                foreach (var row in kv.Value)
+                {
+                    var app = (AppRow)row.Item;
+                    bool show = (!installedOnly || app.Installed) &&
+                                (text.Length == 0 ||
+                                 app.Name.IndexOf(text, StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                 app.Effect.IndexOf(text, StringComparison.OrdinalIgnoreCase) >= 0);
+                    row.Visible = show;
+                    any |= show;
+                }
+                kv.Key.Visible = any;
+            }
+            List.ResumeLayout();
+            List.PerformLayout();
+            UpdateSummary();
+        }
+
+        void UpdateSummary()
+        {
+            var all = sections.Values.SelectMany(x => x).ToList();
+            int installed = all.Count(r => ((AppRow)r.Item).Installed);
+            int safe = all.Count(r => ((AppRow)r.Item).Installed && ((AppRow)r.Item).Level == AppLevel.Safe);
+            int selected = all.Count(r => r.Checked);
+            Footer.Summary.Text = scanned
+                ? installed + " installed     " + safe + " safe to remove     " + selected + " selected"
+                : "Not scanned yet";
+            uninstallBtn.Enabled = selected > 0;
+            storeBtn.Enabled = highlighted != null;
         }
 
         async Task UninstallSelected()
         {
-            var chosen = appList.CheckedItems.Cast<ListViewItem>().Select(i => (AppRow)i.Tag).Where(r => r.Installed).ToList();
-            if (chosen.Count == 0) { MessageBox.Show(this, "Tick at least one installed app first.", Text); return; }
-
+            var chosen = sections.Values.SelectMany(x => x).Where(r => r.Checked).Select(r => (AppRow)r.Item).ToList();
+            if (chosen.Count == 0) return;
             var critical = chosen.Where(r => r.Level == AppLevel.Critical).ToList();
             var msg = "Uninstall " + chosen.Count + " app(s) for your user account?\n\n" +
-                      string.Join("\n", chosen.Select(r => "- " + r.Name + ": " + r.Effect)) +
-                      "\n\nTo get an app back later, use 'Get highlighted app from Store'.";
+                      string.Join("\n", chosen.Select(r => "-  " + r.Name + ": " + r.Effect)) +
+                      "\n\nTo get an app back later, click it and choose 'Get from Store'.";
             if (critical.Count > 0)
                 msg += "\n\nCRITICAL apps selected: " + string.Join(", ", critical.Select(r => r.Name)) +
                        ". These can break Windows features and may be hard to restore.";
-            if (MessageBox.Show(this, msg, "Uninstall apps", MessageBoxButtons.YesNo,
+            if (MessageBox.Show(FindForm(), msg, "Uninstall apps", MessageBoxButtons.YesNo,
                     critical.Count > 0 ? MessageBoxIcon.Warning : MessageBoxIcon.Question, MessageBoxDefaultButton.Button2) != DialogResult.Yes)
                 return;
 
+            uninstallBtn.Enabled = false;
             UseWaitCursor = true;
-            foreach (var row in chosen)
+            foreach (var app in chosen)
             {
-                Log("Uninstalling " + row.Name + "...");
-                var error = await AppScanner.UninstallAsync(row);
-                Log(error == null ? "REMOVED   " + row.Name : "FAILED    " + row.Name + "  (" + error + ")");
+                log("Uninstalling " + app.Name + "...");
+                var error = await AppScanner.UninstallAsync(app);
+                log(error == null ? "REMOVED   " + app.Name : "FAILED    " + app.Name + "  (" + error + ")");
             }
             UseWaitCursor = false;
-            ScanApps();
+            Scan();
         }
     }
 }

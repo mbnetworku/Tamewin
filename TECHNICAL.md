@@ -9,7 +9,9 @@
 | `Apps.cs` | **Every known app** (`AppCatalog`) with its level and effect. To add one, add an `A(level, pattern, name, effect)` line. Also contains the scanner and uninstaller. |
 | `Tweak.cs` | `Tweak` / `RegOp` types. `Admin` is worked out automatically (HKLM or `...\Policies\...` keys). |
 | `Engine.cs` | Apply, revert and status. Writes the backup before the first change. |
-| `MainForm.cs` | The window: the *Privacy & settings* and *Apps (bloatware)* tabs. |
+| `MainForm.cs` | The window: sidebar, plus the Privacy, Windows features, Apps and Activity pages (`TweakPage`, `AppsPage`). |
+| `Widgets.cs` | Custom-drawn controls: `OptionRow` (card with checkbox, text and pills), `FlatButton`, `NavItem`, `ListPanel`, `PageLayout`. |
+| `Theme.cs` | Colours (Windows 11 style, light and dark), fonts, DPI scaling (`S(px)`), and the dark title bar. |
 | `Program.cs` | Starts the window, or runs the command-line mode. |
 
 ## Adding an option
@@ -39,7 +41,10 @@ Ids must be unique and never reused, because backups are stored by id. Then run 
 Fastyourpc.exe --list | --apply <ids|recommended> | --revert <ids|all> | --apps | --help
   --test-root <key>   redirect all registry writes to HKCU\<key> (testing)
   --backup <file>     use a different backup file
+  --theme light|dark  force a theme
+  --screenshot <file.png> <privacy|features|apps|log>   draw a page off-screen to a PNG and exit
 ```
+The README screenshots are made with `--test-root` plus `--screenshot`, so they show a clean state and not a real PC's settings. The Apps page isn't used for screenshots, because it would show the apps installed on the PC that took them.
 Exit codes: 0 = OK, 1 = some items failed or were skipped, 2 = bad arguments.
 
 ## Testing

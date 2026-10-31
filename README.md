@@ -12,17 +12,29 @@ Nothing touches your Microsoft account or sign-in.
 
 Download `Fastyourpc.exe` from the Releases page and double-click it. Nothing to install: it uses .NET Framework 4.8, which is built into Windows 10 and 11.
 
-**Tab 1: Privacy & settings.** Tick what you want, then click **Apply selected**. To undo, tick it and click **Revert selected**. The *Status* column shows what's applied now. **Select recommended** ticks the safe set. Options marked *Administrator* are grey until you click **Restart as Administrator**.
+![Privacy page](docs/privacy-light.png)
 
-**Tab 2: Apps (bloatware).** Scans your PC and lists every known preinstalled app as **Installed** or **Not installed**, grouped as:
+It follows your Windows light/dark setting:
+
+![Privacy page, dark mode](docs/privacy-dark.png)
+
+The sidebar has four pages:
+
+**Privacy.** Every option is a card with a one-line explanation and a status label (*Applied*, *Partly*, *Not applied*). Tick what you want, then click **Apply selected**. To undo, tick it and click **Revert selected**. **Select recommended** ticks the safe set. Options marked *Needs admin* are grey until you click **Restart as admin** in the sidebar.
+
+**Windows features.** Classic right-click menu, and Windows protected print mode on/off, with **Restart Explorer** and **Open printer settings** buttons.
+
+![Windows features page](docs/features-light.png)
+
+**Apps (bloatware).** Scans your PC and lists every known preinstalled app as **Installed** or **Not installed**. You can search it and filter it to installed apps only. Apps are grouped as:
 - **Safe to remove**: nothing else depends on it.
 - **Think first**: a feature stops working (e.g. Snipping Tool means Win+Shift+S stops working).
 - **CRITICAL - not recommended**: can break Windows features (Store, Windows Security, runtimes). Ticking one shows a warning you must confirm.
 - **Other installed apps**: anything else removable that isn't in the list.
 
-Click an app to see what removing it affects. Uninstall is for your user account. To get an app back, click it and choose **Get highlighted app from Store**.
+Each app's card says what stops working if you remove it. Uninstall is for your user account. To get an app back, click it and choose **Get from Store**.
 
-Backups and a list of removed apps are kept in `%LOCALAPPDATA%\Fastyourpc`. The log at the bottom shows every change.
+**Activity.** A log of every change in this session, and a button that opens `%LOCALAPPDATA%\Fastyourpc`, where backups and the list of removed apps are kept.
 
 Command line: `Fastyourpc.exe --list`, `--apply ad_id,tips`, `--apply recommended`, `--revert all`, `--apps`. Run `Fastyourpc.exe --help` for details.
 

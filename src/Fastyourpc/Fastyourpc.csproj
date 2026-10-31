@@ -17,6 +17,7 @@
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
 
     <Version>1.0.0</Version>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <Product>Fastyourpc</Product>
     <AssemblyTitle>Fastyourpc</AssemblyTitle>
     <Description>Windows privacy settings, tweaks and app remover, with undo</Description>

@@ -85,8 +85,9 @@ namespace Fastyourpc
 
         public TweakState State(Tweak t)
         {
-            int n = t.Ops.Count(Matches);
-            return n == 0 ? TweakState.NotApplied : n == t.Ops.Length ? TweakState.Applied : TweakState.Partly;
+            if (t.Ops.All(Matches)) return TweakState.Applied;
+            // "Delete this value" ops match whenever the value is absent, so only values it sets count as partly applied.
+            return t.Ops.Any(op => op.Value != null && Matches(op)) ? TweakState.Partly : TweakState.NotApplied;
         }
 
         public bool HasBackup(Tweak t) => Backup.Load(BackupPath).Any(e => e.TweakId == t.Id);

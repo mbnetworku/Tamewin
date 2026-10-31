@@ -23,27 +23,33 @@ Command line:
 
 Testing options:
   --test-root <key>   redirect every registry change to HKCU\<key> (nothing real is touched)
-  --backup <file>     use this backup file instead of %LOCALAPPDATA%\Fastyourpc\backup.tsv";
+  --backup <file>     use this backup file instead of %LOCALAPPDATA%\Fastyourpc\backup.tsv
+  --theme light|dark  force a theme instead of following Windows
+  --screenshot <file.png> <privacy|features|apps|log>   save a picture of a page and exit";
 
         [STAThread]
         static int Main(string[] args)
         {
-            string testRoot = null, backup = null, command = null, arg = null;
+            string testRoot = null, backup = null, command = null, arg = null, theme = null, shotPage = null;
             for (int i = 0; i < args.Length; i++)
             {
                 var a = args[i].ToLowerInvariant();
                 string Next() => i + 1 < args.Length ? args[++i] : null;
                 if (a == "--test-root") testRoot = Next();
                 else if (a == "--backup") backup = Next();
+                else if (a == "--theme") theme = Next();
                 else if (a == "--apply" || a == "--revert") { command = a; arg = Next(); }
+                else if (a == "--screenshot") { command = a; arg = Next(); shotPage = Next(); }
                 else command = a;
             }
             var engine = new Engine(testRoot, backup);
+            Theme.Init(theme == "dark" ? true : theme == "light" ? (bool?)false : null);
 
-            if (command == null)
+            if (command == null || command == "--screenshot")
             {
                 Application.EnableVisualStyles();
                 Application.SetCompatibleTextRenderingDefault(false);
+                if (command == "--screenshot") return Screenshot(engine, arg, shotPage ?? "privacy");
                 Application.Run(new MainForm(engine));
                 return 0;
             }
@@ -82,6 +88,25 @@ Testing options:
                     Console.WriteLine(Help);
                     return command == "--help" || command == "-h" || command == "/?" ? 0 : 2;
             }
+        }
+
+        /// <summary>Draws a page off-screen and saves it as a PNG (for docs and design checks).</summary>
+        static int Screenshot(Engine engine, string file, string page)
+        {
+            using (var form = new MainForm(engine, showTestLabel: false) { StartPosition = FormStartPosition.Manual, ShowInTaskbar = false })
+            {
+                form.Location = new System.Drawing.Point(-30000, -30000);
+                form.Show();
+                form.ShowPage(page);
+                Application.DoEvents();
+                using (var bmp = new System.Drawing.Bitmap(form.Width, form.Height))
+                {
+                    form.DrawToBitmap(bmp, new System.Drawing.Rectangle(0, 0, form.Width, form.Height));
+                    bmp.Save(file, System.Drawing.Imaging.ImageFormat.Png);
+                }
+                form.Close();
+            }
+            return 0;
         }
 
         static Tweak[] Pick(string arg, bool apply)
