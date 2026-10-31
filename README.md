@@ -11,8 +11,32 @@ PowerShell scripts that turn off Windows 11 and Microsoft Office data sharing, t
 Download or clone this repository, open PowerShell in its folder, then:
 
 ```powershell
-.\Apply-Privacy.ps1     # turn data sharing off (saves a backup first)
-.\Revert-Privacy.ps1    # put everything back the way it was
+.\Apply-Privacy.ps1     # shows a menu: choose what to turn off (saves a backup first)
+.\Revert-Privacy.ps1    # shows a menu: choose what to put back
+```
+
+The menu:
+```
+Choose what to turn OFF:
+  1) Tips, suggestions & ads  [14 settings]
+  2) Search history & web search  [4 settings]
+  3) Feedback, speech & typing  [6 settings]
+  4) Office telemetry  [2 settings]
+  5) Office connected experiences & feedback (needs Administrator)  [7 settings]
+  A) All
+  I) Pick individual settings
+  Q) Quit
+Your choice (e.g. 1,3):
+```
+
+Type one or more numbers (`1,3`), `A` for everything, or `I` to pick single settings from a numbered list (ranges work too, like `1,4,7-9`).
+
+No menu, for scripts:
+```powershell
+.\Apply-Privacy.ps1 -All                 # everything
+.\Apply-Privacy.ps1 -Group Tips,Search   # groups: Tips, Search, Typing, Office, OfficeAdmin
+.\Revert-Privacy.ps1 -Group Office       # undo just one group
+.\Revert-Privacy.ps1 -All                # undo everything
 ```
 
 If scripts are blocked, run once: `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`

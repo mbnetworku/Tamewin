@@ -4,13 +4,21 @@
 
 Turn privacy settings **off** (safe to run again; the original backup is kept):
 ```powershell
-.\Apply-Privacy.ps1
+.\Apply-Privacy.ps1                        # menu
+.\Apply-Privacy.ps1 -All                   # everything
+.\Apply-Privacy.ps1 -Group Tips,Search     # chosen groups
 ```
 
-**Undo** everything (back to how it was before the first apply):
+**Undo** (back to how it was before the first apply):
 ```powershell
-.\Revert-Privacy.ps1
+.\Revert-Privacy.ps1                       # menu
+.\Revert-Privacy.ps1 -All                  # everything
+.\Revert-Privacy.ps1 -Group Office         # chosen groups
 ```
+
+Menu input: group numbers (`1,3`), `A` = all, `I` = pick individual settings by number (`1,4,7-9`), `Q` or Enter = quit without changes.
+
+Groups: `Tips`, `Search`, `Typing`, `Office`, `OfficeAdmin`. These match the sections below.
 
 To include the Office policy settings marked **Admin** below, run PowerShell **as Administrator**.
 
@@ -22,15 +30,15 @@ Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 Sign out and back in (or restart) after applying or reverting.
 
 ## How it works
-1. `settings-list.ps1` defines `$PrivacySettings` (Path, Name, Value, Note) and `$BackupFile`.
-2. **Apply**: if `privacy-backup.json` doesn't exist yet, it records each setting's current value, or that it didn't exist (`Existed=false`). Then it writes each value as a DWORD. Settings it can't write print `SKIPPED`.
-3. **Revert**: writes each old value back, or removes the value if it didn't exist before (Windows then uses its default). Then it deletes the backup, so the next Apply takes a fresh one.
+1. `settings-list.ps1` defines `$PrivacyGroups`, `$PrivacySettings` (Group, Path, Name, Value, Note), `$BackupFile`, and `Select-PrivacySettings`, which returns the chosen settings from `-All`, `-Group` or the menu.
+2. **Apply**: if `privacy-backup.json` doesn't exist yet, it records the current value of **every** setting (not only the chosen ones), or that it didn't exist (`Existed=false`). Then it writes each chosen value as a DWORD. Settings it can't write print `SKIPPED`.
+3. **Revert**: for each chosen setting, it writes the old value back, or removes the value if it didn't exist before (Windows then uses its default). The backup is deleted only after a full revert (all settings). After a partial revert it's kept, so the rest can still be restored later.
 
 All writes are under `HKEY_CURRENT_USER`. Nothing under `HKLM`, no services and no account settings are changed.
 
 ## Settings
 
-### Windows — tips, suggestions, ads
+### Windows — tips, suggestions, ads (`Tips`)
 | Setting | Registry (HKCU\Software\Microsoft\Windows\CurrentVersion\…) | Value |
 |---|---|---|
 | Tips and suggestions | `ContentDeliveryManager\SubscribedContent-338389Enabled` | 0 |
@@ -45,7 +53,7 @@ All writes are under `HKEY_CURRENT_USER`. Nothing under `HKLM`, no services and 
 | Recommendations in Start | `Explorer\Advanced\Start_IrisRecommendations` | 0 |
 | Websites read language list | `HKCU\Control Panel\International\User Profile\HttpAcceptLanguageOptOut` | 1 |
 
-### Windows — search
+### Windows — search (`Search`)
 | Setting | Registry | Value |
 |---|---|---|
 | Search history on device | `…\SearchSettings\IsDeviceSearchHistoryEnabled` | 0 |
@@ -53,7 +61,7 @@ All writes are under `HKEY_CURRENT_USER`. Nothing under `HKLM`, no services and 
 | Cloud search (work account) | `…\SearchSettings\IsAADCloudSearchEnabled` | 0 |
 | Bing results in Start search | `…\Search\BingSearchEnabled` | 0 |
 
-### Windows — feedback, speech, typing
+### Windows — feedback, speech, typing (`Typing`)
 | Setting | Registry (HKCU\Software\Microsoft\…) | Value |
 |---|---|---|
 | Feedback requests | `Siuf\Rules\NumberOfSIUFInPeriod` | 0 |
@@ -63,7 +71,7 @@ All writes are under `HKEY_CURRENT_USER`. Nothing under `HKLM`, no services and 
 | Contacts used for typing | `InputPersonalization\TrainedDataStore\HarvestContacts` | 0 |
 | Improve inking & typing | `Input\TIPC\Enabled` | 0 |
 
-### Office
+### Office (`Office` = rows without Admin; `OfficeAdmin` = rows marked Admin)
 | Setting | Registry (HKCU\Software\…) | Value | Needs |
 |---|---|---|---|
 | Office telemetry | `Microsoft\Office\Common\ClientTelemetry\DisableTelemetry` | 1 | — |
