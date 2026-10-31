@@ -1,6 +1,8 @@
 # Technical Notes
 
-## How to run
+Start with `.\Fastyourpc.ps1` (main menu), or run each script directly.
+
+## Privacy — how to run
 
 Turn privacy settings **off** (safe to run again; the original backup is kept):
 ```powershell
@@ -83,6 +85,37 @@ All writes are under `HKEY_CURRENT_USER`. Nothing under `HKLM`, no services and 
 | Send feedback / screenshots / surveys | `Policies\…\16.0\Common\Feedback\enabled`, `includescreenshot`, `surveyenabled` | 0 | Admin |
 
 No admin? In Word, go to **File → Account → Account Privacy → Manage Settings** and turn off the connected experiences there. If the policy settings are applied, Office may say "some settings are managed by your organization". That's expected.
+
+## Classic right-click menu (`Set-ClassicMenu.ps1`)
+
+| State | Registry |
+|---|---|
+| ON (classic) | Key `HKCU\Software\Classes\CLSID\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}\InprocServer32` exists, with its (Default) value set to an empty string |
+| OFF (Windows 11) | Key `HKCU\Software\Classes\CLSID\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}` removed |
+
+- Current user only, no admin needed.
+- Takes effect after Explorer restarts. `-RestartExplorer`, or answering `Y` in the menu, does this immediately and closes open File Explorer windows. Signing out or restarting the PC also works.
+- `-KeyPath` overrides the key, which is used for testing on a throwaway key.
+
+## Windows protected print mode (`Set-ProtectedPrint.ps1`)
+
+Key: `HKLM\SOFTWARE\Policies\Microsoft\Windows NT\Printers\WPP` (needs Administrator).
+
+| Action | Values (REG_DWORD) |
+|---|---|
+| `-On` | `EnabledBy`=2, `WindowsProtectedPrintGroupPolicyState`=1, `WindowsProtectedPrintMode`=1, `WindowsProtectedPrintOobeConfigComplete`=1 |
+| `-Off` | `WindowsProtectedPrintMode`=0. The other three values are removed. |
+| `-Default` | All four values removed. Windows then follows the Settings app toggle. |
+| `-Status` | Reads the values only. |
+
+- Restart the PC after any change.
+- Turning it **ON** removes printers that aren't Mopria-compatible. After turning it off, add them again under Settings → Printers & scanners.
+- These values come from community guides, which don't fully agree, not from official Microsoft documentation. Microsoft's supported ways are Group Policy (Computer Configuration → Administrative Templates → Printers → *Configure Windows protected print*) and the Settings toggle. Menu option 4 opens that Settings page (`ms-settings:printers`).
+- The script refuses `-On`, `-Off` and `-Default` without Administrator. `Fastyourpc.ps1` offers to reopen it in an admin window.
+
+## Main menu (`Fastyourpc.ps1`)
+
+A loop that runs `Apply-Privacy.ps1`, `Revert-Privacy.ps1`, `Set-ClassicMenu.ps1` or `Set-ProtectedPrint.ps1`. For protected print, if the current window isn't admin, it starts an elevated PowerShell (UAC prompt) running that script.
 
 ## Not covered (manual, by design)
 - **Required diagnostic data / DiagTrack service.** It's a system service and can't be fully turned off on Windows 11 Home/Pro. Set it to "Required only" in Settings → Privacy & security → Diagnostics & feedback.
