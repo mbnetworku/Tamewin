@@ -1,14 +1,40 @@
 # Fastyourpc
 
-PowerShell tools for Windows 11:
+Windows 10/11 tools, available as one portable **`Fastyourpc.exe`** or as PowerShell scripts:
 
-- **Privacy**: turn off Windows and Microsoft Office data sharing, tips and suggestions, with an undo.
-- **Classic right-click menu**: switch between the old full menu and the Windows 11 menu.
-- **Windows protected print mode**: turn it on or off.
+- **Privacy & settings**: turn off Windows, Office and Edge data sharing, telemetry and diagnostic data, tips and ads. Undo puts back exactly what was there before.
+- **Apps (bloatware)**: scans which preinstalled apps are installed and which aren't, rates each one (safe / think first / critical), says what stops working if you remove it, and uninstalls the ones you pick.
+- **Classic right-click menu** and **Windows protected print mode** on/off.
 
-None of them touch your Microsoft account or sign-in.
+Nothing touches your Microsoft account or sign-in.
 
-## Start here
+## Fastyourpc.exe (recommended)
+
+Download `Fastyourpc.exe` from the Releases page and double-click it. Nothing to install: it uses .NET Framework 4.8, which is built into Windows 10 and 11.
+
+**Tab 1: Privacy & settings.** Tick what you want, then click **Apply selected**. To undo, tick it and click **Revert selected**. The *Status* column shows what's applied now. **Select recommended** ticks the safe set. Options marked *Administrator* are grey until you click **Restart as Administrator**.
+
+**Tab 2: Apps (bloatware).** Scans your PC and lists every known preinstalled app as **Installed** or **Not installed**, grouped as:
+- **Safe to remove**: nothing else depends on it.
+- **Think first**: a feature stops working (e.g. Snipping Tool means Win+Shift+S stops working).
+- **CRITICAL - not recommended**: can break Windows features (Store, Windows Security, runtimes). Ticking one shows a warning you must confirm.
+- **Other installed apps**: anything else removable that isn't in the list.
+
+Click an app to see what removing it affects. Uninstall is for your user account. To get an app back, click it and choose **Get highlighted app from Store**.
+
+Backups and a list of removed apps are kept in `%LOCALAPPDATA%\Fastyourpc`. The log at the bottom shows every change.
+
+Command line: `Fastyourpc.exe --list`, `--apply ad_id,tips`, `--apply recommended`, `--revert all`, `--apps`. Run `Fastyourpc.exe --help` for details.
+
+### Is it safe? Antivirus
+- **Open source:** everything is in `src/`. No network access, no hidden PowerShell, no packing or obfuscation. Registry changes use .NET's registry API, and apps are removed with Windows' own PackageManager API.
+- Each release lists the EXE's **SHA-256**. Check it with `Get-FileHash Fastyourpc.exe`.
+- **Not code-signed yet.** Windows SmartScreen may say "unknown publisher" (click *More info → Run anyway*). Some antivirus products flag *any* unsigned tool that changes privacy settings or removes apps. If yours does, please report it as a false positive. See [TECHNICAL.md](TECHNICAL.md#antivirus-and-false-positives).
+- Build it yourself: `.\build.ps1` (needs the .NET SDK).
+
+## PowerShell scripts
+
+The original scripts still work and don't need the EXE.
 
 Download or clone this repository, open PowerShell in its folder, then:
 

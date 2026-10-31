@@ -1,2 +1,7 @@
 # Machine-specific backup of the original settings — never commit
 privacy-backup.json
+
+# Build output (the EXE is published as a GitHub Release, not committed)
+bin/
+obj/
+dist/

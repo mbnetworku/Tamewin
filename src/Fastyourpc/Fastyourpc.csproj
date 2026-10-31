@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <!-- .NET Framework 4.8 is built into Windows 10/11, so the EXE runs without installing anything. -->
+    <TargetFramework>net48</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <AssemblyName>Fastyourpc</AssemblyName>
+    <RootNamespace>Fastyourpc</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- 64-bit when possible, so HKLM isn't redirected to WOW6432Node. -->
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <Prefer32Bit>false</Prefer32Bit>
+    <Deterministic>true</Deterministic>
+    <DebugType>none</DebugType>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+
+    <Version>1.0.0</Version>
+    <Product>Fastyourpc</Product>
+    <AssemblyTitle>Fastyourpc</AssemblyTitle>
+    <Description>Windows privacy settings, tweaks and app remover, with undo</Description>
+    <Company>Fastyourpc (open source)</Company>
+    <Copyright>Open source - see repository</Copyright>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Drawing" />
+    <!-- Windows' own app (AppX) PackageManager API, used to list and uninstall apps without running PowerShell. -->
+    <PackageReference Include="Microsoft.Windows.SDK.Contracts" Version="10.0.22621.3233" />
+  </ItemGroup>
+
+</Project>

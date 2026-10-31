@@ -1,5 +1,66 @@
 # Technical Notes
 
+# Part 1: Fastyourpc.exe
+
+## Source layout (`src/Fastyourpc`)
+| File | What it does |
+|---|---|
+| `Catalog.cs` | **Every privacy/settings option.** To add one, add a `T(group, id, title, info, ops...)` line. |
+| `Apps.cs` | **Every known app** (`AppCatalog`) with its level and effect. To add one, add an `A(level, pattern, name, effect)` line. Also contains the scanner and uninstaller. |
+| `Tweak.cs` | `Tweak` / `RegOp` types. `Admin` is worked out automatically (HKLM or `...\Policies\...` keys). |
+| `Engine.cs` | Apply, revert and status. Writes the backup before the first change. |
+| `MainForm.cs` | The window: the *Privacy & settings* and *Apps (bloatware)* tabs. |
+| `Program.cs` | Starts the window, or runs the command-line mode. |
+
+## Adding an option
+```csharp
+T(Tips, "my_new_id", "Turn off something", "One sentence: what changes for the user.",
+    CU(@"Software\...\Key", "ValueName", 0)),          // HKCU, REG_DWORD 0
+// LM(...) for HKLM (needs admin). Value: int = REG_DWORD, string = REG_SZ, null = delete the value.
+// Optional: .Needs("Restart the PC ...")  .Warn("shown before applying")  .Optional()  .ConflictsWith("other_id")
+```
+Ids must be unique and never reused, because backups are stored by id. Then run `.\build.ps1` and `tests\Test-Fastyourpc.ps1`.
+
+## How apply / revert work
+- **Apply:** before a tweak's first apply, each of its values is saved to `%LOCALAPPDATA%\Fastyourpc\backup.tsv`: whether it existed, its type and value, and the highest key that didn't exist yet. Then the new values are written. Applying again keeps the original backup.
+- **Revert:** writes the saved values back, deletes values that didn't exist, and removes keys the app created (only if they're empty). If there's no backup (the setting was changed by something else), it resets to Windows' default.
+- **Conflicts:** applying `wpp_off` first reverts `wpp_on`, and the other way round.
+- **Status:** *Applied* = every value matches, *Partly* = some do, *Not applied* = none do.
+- HKLM is opened in the 64-bit view, so nothing is redirected to `WOW6432Node`.
+
+## Apps tab
+- **Scan:** `PackageManager.FindPackagesForUser("")` (current user). Each known app is matched by package name (`*` wildcard) and shown as Installed or Not installed. *Other installed apps* = Store- or developer-signed packages that aren't frameworks, resources or bundles, and aren't in the list.
+- **Uninstall:** `PackageManager.RemovePackageAsync(fullName)` for the current user. Removed apps are logged to `%LOCALAPPDATA%\Fastyourpc\removed-apps.tsv`, so *Get from Store* can open the exact Store page.
+- It doesn't remove *provisioned* copies (apps preinstalled for new user accounts). That needs DISM and Administrator.
+- Levels: **Safe** = nothing depends on it. **Caution** = a Windows feature stops working. **Critical** = Store, Windows Security, sign-in, runtimes, etc.; ticking one shows a warning you must confirm.
+
+## Command line
+```
+Fastyourpc.exe --list | --apply <ids|recommended> | --revert <ids|all> | --apps | --help
+  --test-root <key>   redirect all registry writes to HKCU\<key> (testing)
+  --backup <file>     use a different backup file
+```
+Exit codes: 0 = OK, 1 = some items failed or were skipped, 2 = bad arguments.
+
+## Testing
+`tests\Test-Fastyourpc.ps1` runs the built EXE with `--test-root Software\FastyourpcTest` and a temporary backup, so no real setting changes. It covers apply, revert, restoring a pre-existing value, cleaning up created keys, conflicts, optional items and a read-only app scan. It never uninstalls anything.
+
+## Antivirus and false positives
+The app is written to look like what it is:
+- Plain compiled C# (.NET Framework 4.8). No packer, obfuscator, embedded scripts or downloader, and no network code.
+- No PowerShell or cmd is started. Registry changes use `Microsoft.Win32.Registry`, and apps are removed with `Windows.Management.Deployment.PackageManager`.
+- `asInvoker` manifest: it only asks for Administrator when you click *Restart as Administrator*.
+- Deterministic build: building the same source gives the same EXE, and the SHA-256 is published.
+
+Some products still flag unsigned tools that change privacy settings or remove apps (heuristic or "hacktool/potentially unwanted" detections). The legitimate fixes:
+1. **Code-sign the EXE**, e.g. with Azure Trusted Signing or a free open-source signing service like SignPath Foundation. This is the biggest improvement for SmartScreen and antivirus.
+2. **Check every release on VirusTotal** (~70 engines, including Palo Alto/Cortex, ESET, McAfee/Trellix, Kaspersky, Bitdefender and Microsoft).
+3. **Report any detection as a false positive** to that vendor: Microsoft (Security Intelligence submission), Palo Alto (WildFire), ESET (samples@eset.com), McAfee/Trellix (false-positive form), Kaspersky (opentip / threat.kaspersky.com).
+
+Never "fix" a detection by obfuscating or packing the EXE. That's exactly what malware does.
+
+# Part 2: PowerShell scripts
+
 Start with `.\Fastyourpc.ps1` (main menu), or run each script directly.
 
 ## Privacy — how to run

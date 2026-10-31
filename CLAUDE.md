@@ -8,7 +8,15 @@ Guidance for Claude (or any AI assistant) working in this repository.
 - Keep every change reversible: back up first, and provide a revert.
 - Never commit `privacy-backup.json` or any personal or machine-specific information.
 
-## Layout
+## Fastyourpc.exe (C#, `src/Fastyourpc`)
+- New privacy/settings option → one `T(...)` line in `Catalog.cs`. New app → one `A(...)` line in `Apps.cs`. Nothing else needs changing.
+- Option ids are permanent (backups are keyed by id). Every option needs a one-sentence `Info` saying what changes for the user.
+- Every app needs a level (Safe / Caution / Critical) and an `Effect` saying what stops working. If unsure, use Caution.
+- Build with `.\build.ps1`, then run `tests\Test-Fastyourpc.ps1`. It uses `--test-root`, so real settings are never touched. Never test by uninstalling real apps or writing real keys.
+- Antivirus: keep it plain. No packers, obfuscation, network code, hidden PowerShell/cmd, or self-elevation without a user click. Never try to evade detection. Fix false positives with code signing and vendor submissions (see TECHNICAL.md).
+- `dist/`, `bin/` and `obj/` are not committed. The EXE goes in a GitHub Release with its SHA-256.
+
+## PowerShell scripts layout
 | File | Purpose |
 |---|---|
 | `settings-list.ps1` | The single list of registry settings (Group, Path, Name, Value, Note), the `$PrivacyGroups` menu labels, and `Select-PrivacySettings` (menu / `-All` / `-Group`). Add or remove settings here only. |
