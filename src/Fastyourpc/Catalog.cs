@@ -16,8 +16,9 @@ namespace Fastyourpc
         public const string Diag = "Diagnostic data & telemetry";
         public const string Activity = "Activity, location & AI";
         public const string Features = "Windows features";
+        public const string Updates = "Windows Update";
 
-        public static readonly string[] Groups = { Tips, Search, Typing, Office, Diag, Activity, Features };
+        public static readonly string[] Groups = { Tips, Search, Typing, Office, Diag, Activity, Features, Updates };
 
         const string RestartExplorer = "Restart Explorer (or sign out) to see the change";
         const string RestartPc = "Restart the PC for this to take effect";
@@ -29,6 +30,8 @@ namespace Fastyourpc
         const string DC = @"SOFTWARE\Policies\Microsoft\Windows\DataCollection";
         const string OFFPOL = @"Software\Policies\Microsoft\Office";
         const string WPP = @"SOFTWARE\Policies\Microsoft\Windows NT\Printers\WPP";
+        const string WU = @"SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate";
+        const string NoServer = "http://127.0.0.1";   // update server that doesn't exist, so every check fails
 
         static RegOp CU(string key, string name, object value, object def = null) => new RegOp(Hive.CU, key, name, value, def);
         static RegOp LM(string key, string name, object value, object def = null) => new RegOp(Hive.LM, key, name, value, def);
@@ -181,6 +184,26 @@ namespace Fastyourpc
                 LM(WPP, "WindowsProtectedPrintMode", 0), LM(WPP, "EnabledBy", null),
                 LM(WPP, "WindowsProtectedPrintGroupPolicyState", null), LM(WPP, "WindowsProtectedPrintOobeConfigComplete", null))
                 .ConflictsWith("wpp_on").Needs(RestartPc).Optional(),
+
+            // ---------------- Windows Update ----------------
+            T(Updates, "block_updates", "Block Windows Update completely",
+                "No Windows, security or driver updates are downloaded or installed, automatically or by hand. " +
+                "Settings > Windows Update will say updates are managed by your organization. Revert turns updates back on.",
+                LM(WU + @"\AU", "NoAutoUpdate", 1),
+                LM(WU + @"\AU", "UseWUServer", 1),
+                LM(WU, "WUServer", NoServer),
+                LM(WU, "WUStatusServer", NoServer),
+                LM(WU, "DoNotConnectToWindowsUpdateInternetLocations", 1),
+                LM(WU, "DisableWindowsUpdateAccess", 1),
+                LM(WU, "SetDisableUXWUAccess", 1),
+                LM(WU, "ExcludeWUDriversInQualityUpdate", 1),
+                LM(@"SYSTEM\CurrentControlSet\Services\wuauserv", "Start", 4, 3),
+                LM(@"SYSTEM\CurrentControlSet\Services\UsoSvc", "Start", 4, 2))
+                .Warn("Your PC will get NO security updates while this is on, which leaves it open to new viruses and attacks. " +
+                      "Microsoft Store downloads and some Windows Defender updates may also stop. " +
+                      "Windows may switch the update service back on by itself; if the status shows 'Partly', apply it again. " +
+                      "Revert it at least once a month to install security updates.")
+                .Needs(RestartPc).Optional(),
         };
 
         public static Tweak Find(string id) => All.FirstOrDefault(t => t.Id == id);

@@ -353,9 +353,14 @@ namespace Fastyourpc
     /// </summary>
     public sealed class ListPanel : Panel
     {
-        int offset, contentHeight;
+        [DllImport("user32.dll")]
+        static extern int ScrollWindowEx(IntPtr hWnd, int dx, int dy, IntPtr scroll, IntPtr clip, IntPtr rgnUpdate, IntPtr rcUpdate, uint flags);
+        const uint SW_SCROLLCHILDREN = 0x1, SW_INVALIDATE = 0x2;
+
+        int offset, target, contentHeight;
         bool barHover, dragging;
         int dragStartY, dragStartOffset;
+        readonly Timer glide = new Timer { Interval = 10 };
 
         public ListPanel()
         {
@@ -366,20 +371,54 @@ namespace Fastyourpc
             Dock = DockStyle.Fill;
             Padding = new Padding(S(30), 0, S(30), S(20));
             Margin = Padding.Empty;
+            glide.Tick += (s, e) => GlideStep();
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) glide.Dispose();
+            base.Dispose(disposing);
         }
 
         int MaxOffset => Math.Max(0, contentHeight - ClientSize.Height);
         bool CanScroll => MaxOffset > 0;
+        int Clamp(int y) => Math.Max(0, Math.Min(MaxOffset, y));
 
-        public void ScrollBy(int wheelDelta) => ScrollTo(offset - wheelDelta * S(60) / 120);
+        // Wheel notches add up from where the scroll is heading, so fast wheeling keeps going.
+        public void ScrollBy(int wheelDelta) => ScrollTo(target - wheelDelta * S(100) / 120);
 
-        public void ScrollTo(int y)
+        /// <summary>Scrolls to y. Animated by default; dragging the bar jumps straight there.</summary>
+        public void ScrollTo(int y, bool animate = true)
         {
-            y = Math.Max(0, Math.Min(MaxOffset, y));
-            if (y == offset) return;
+            target = Clamp(y);
+            if (!animate || !IsHandleCreated) { glide.Stop(); MoveTo(target); }
+            else if (target != offset) glide.Start();
+        }
+
+        // Eases towards the target: each tick covers a third of the remaining distance.
+        void GlideStep()
+        {
+            int left = target - offset;
+            if (left == 0) { glide.Stop(); return; }
+            int step = left / 3;
+            if (step == 0) step = Math.Sign(left);
+            MoveTo(offset + step);
+        }
+
+        // Shifts what's already on screen (children included) instead of moving and repainting every row.
+        void MoveTo(int y)
+        {
+            y = Clamp(y);
+            int dy = offset - y;
+            if (dy == 0) return;
             offset = y;
-            PerformLayout();
-            Invalidate();
+            if (IsHandleCreated)
+            {
+                ScrollWindowEx(Handle, 0, dy, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, SW_SCROLLCHILDREN | SW_INVALIDATE);
+                Invalidate(new Rectangle(Track.Left - S(4), 0, ClientSize.Width - Track.Left + S(4), ClientSize.Height));
+                Update();
+            }
+            else PerformLayout();
         }
 
         /// <summary>Scrolls just enough to show the control (used when Tab moves focus to a hidden row).</summary>
@@ -401,8 +440,8 @@ namespace Fastyourpc
             int page = Math.Max(S(60), ClientSize.Height - S(60));
             switch (e.KeyCode)
             {
-                case Keys.PageDown: ScrollTo(offset + page); break;
-                case Keys.PageUp: ScrollTo(offset - page); break;
+                case Keys.PageDown: ScrollTo(target + page); break;
+                case Keys.PageUp: ScrollTo(target - page); break;
                 case Keys.Home when e.Control: ScrollTo(0); break;
                 case Keys.End when e.Control: ScrollTo(MaxOffset); break;
                 default: return;
@@ -424,7 +463,8 @@ namespace Fastyourpc
                 y += c.Height + c.Margin.Bottom;
             }
             contentHeight = y + Padding.Bottom;
-            offset = Math.Max(0, Math.Min(MaxOffset, offset));
+            offset = Clamp(offset);
+            target = Clamp(target);
 
             y = Padding.Top - offset;
             foreach (Control c in Controls)
@@ -477,7 +517,7 @@ namespace Fastyourpc
             {
                 var t = Track;
                 int room = Math.Max(1, t.Height - Thumb.Height);
-                ScrollTo(dragStartOffset + (int)((long)(e.Y - dragStartY) * MaxOffset / room));
+                ScrollTo(dragStartOffset + (int)((long)(e.Y - dragStartY) * MaxOffset / room), animate: false);
                 return;
             }
             bool over = CanScroll && e.X >= Track.Left - S(6);
@@ -495,9 +535,9 @@ namespace Fastyourpc
             base.OnMouseDown(e);
             if (e.Button != MouseButtons.Left || !CanScroll || e.X < Track.Left - S(6)) return;
             var thumb = Thumb;
-            if (e.Y < thumb.Top) ScrollTo(offset - ClientSize.Height);            // click above: page up
-            else if (e.Y > thumb.Bottom) ScrollTo(offset + ClientSize.Height);    // click below: page down
-            else { dragging = true; dragStartY = e.Y; dragStartOffset = offset; Capture = true; }
+            if (e.Y < thumb.Top) ScrollTo(target - ClientSize.Height);            // click above: page up
+            else if (e.Y > thumb.Bottom) ScrollTo(target + ClientSize.Height);    // click below: page down
+            else { glide.Stop(); target = offset; dragging = true; dragStartY = e.Y; dragStartOffset = offset; Capture = true; }
             Invalidate();
         }
 

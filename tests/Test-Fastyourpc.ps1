@@ -40,14 +40,24 @@ Check 'classic menu key with empty default' ((Test-Path $inproc) -and (Get-Item 
 $r = T '--apply', 'wpp_on';  Check 'wpp_on applied' ((Status 'wpp_on') -match 'Applied')
 $r = T '--apply', 'wpp_off'; Check 'wpp_off reverts wpp_on first' ($r.Text -match 'RESTORED.*force ON' -and (Status 'wpp_off') -match 'Applied' -and (Status 'wpp_on') -notmatch ' Applied')
 
+$wuKey = "HKCU:\$root\LM\SYSTEM\CurrentControlSet\Services\wuauserv"
+New-Item $wuKey -Force | Out-Null
+Set-ItemProperty $wuKey -Name Start -Value 3 -Type DWord
+Check 'block_updates not in recommended' ((Status 'block_updates') -match 'NotApplied')
+$r = T '--apply', 'block_updates'
+Check 'block_updates applied' ((Status 'block_updates') -match 'Applied' -and (Get-ItemProperty $wuKey).Start -eq 4 -and
+    (Get-ItemProperty "HKCU:\$root\LM\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate").WUServer -eq 'http://127.0.0.1')
+
 $r = T '--apply', 'ad_id'
 Check 'second apply keeps original backup' ((Get-Content $backup | Select-String 'ad_id' | Select-String "`t1`tDWord`t1`t").Count -eq 1)
 
 $r = T '--revert', 'all';                  Check 'revert all' ($r.Code -eq 0 -and $r.Text -notmatch 'FAILED')
 Check 'ad_id restored to original 1' ((Get-ItemProperty $adKey).Enabled -eq 1)
 Check 'classic menu key removed' (-not (Test-Path "HKCU:\$root\CU\Software\Classes\CLSID"))
+Check 'update service restored to 3, policy key removed' ((Get-ItemProperty $wuKey).Start -eq 3 -and
+    -not (Test-Path "HKCU:\$root\LM\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate"))
 Check 'backup emptied' (@(Get-Content $backup | Where-Object { $_ -notmatch '^#' }).Count -eq 0)
-$left = Get-ChildItem "HKCU:\$root" -Recurse | Where-Object { $_.ValueCount -gt 0 -and $_.PSChildName -ne 'AdvertisingInfo' }
+$left = Get-ChildItem "HKCU:\$root" -Recurse | Where-Object { $_.ValueCount -gt 0 -and $_.PSChildName -notin 'AdvertisingInfo', 'wuauserv' }
 Check 'no leftover values' (@($left).Count -eq 0)
 
 $r = Run '--apps'

@@ -5,6 +5,7 @@ Windows 10/11 tools, available as one portable **`Fastyourpc.exe`** or as PowerS
 - **Privacy & settings**: turn off Windows, Office and Edge data sharing, telemetry and diagnostic data, tips and ads. Undo puts back exactly what was there before.
 - **Apps (bloatware)**: scans which preinstalled apps are installed and which aren't, rates each one (safe / think first / critical), says what stops working if you remove it, and uninstalls the ones you pick.
 - **Classic right-click menu** and **Windows protected print mode** on/off.
+- **Block Windows Update** completely, and turn it back on with one click.
 
 Nothing touches your Microsoft account or sign-in.
 
@@ -22,7 +23,7 @@ The sidebar has four pages:
 
 **Privacy.** Every option is a card with a one-line explanation and a status label (*Applied*, *Partly*, *Not applied*). Tick what you want, then click **Apply selected**. To undo, tick it and click **Revert selected**. **Select recommended** ticks the safe set. Options marked *Needs admin* are grey until you click **Restart as admin** in the sidebar.
 
-**Windows features.** Classic right-click menu, and Windows protected print mode on/off, with **Restart Explorer** and **Open printer settings** buttons.
+**Windows features.** Classic right-click menu, Windows protected print mode on/off, and **Block Windows Update completely** (with **Restart Explorer** and **Open printer settings** buttons). Blocking updates stops all Windows, security and driver updates, including manual checks. It needs admin and a restart, and shows a warning first. Tick it and click **Revert selected** to turn updates back on. See [TECHNICAL.md](TECHNICAL.md#block-windows-update-block_updates).
 
 ![Windows features page](docs/features-light.png)
 

@@ -30,6 +30,21 @@ Ids must be unique and never reused, because backups are stored by id. Then run 
 - **Status:** *Applied* = every value matches, *Partly* = some do, *Not applied* = none do.
 - HKLM is opened in the 64-bit view, so nothing is redirected to `WOW6432Node`.
 
+## Block Windows Update (`block_updates`)
+Opt-in (never part of *recommended*), needs admin, shows a warning before it can be ticked. A restart is needed. It writes:
+
+| Key | Value | Effect |
+|---|---|---|
+| `HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU` | `NoAutoUpdate`=1, `UseWUServer`=1 | No automatic updates; use the update server below |
+| `HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate` | `WUServer` / `WUStatusServer` = `http://127.0.0.1` | Points Windows Update at a server that doesn't exist, so manual checks fail too |
+| same | `DoNotConnectToWindowsUpdateInternetLocations`=1 | Stops falling back to Microsoft's servers |
+| same | `DisableWindowsUpdateAccess`=1, `SetDisableUXWUAccess`=1 | Removes access to Windows Update features and the "Check for updates" button |
+| same | `ExcludeWUDriversInQualityUpdate`=1 | No driver updates |
+| `HKLM\SYSTEM\CurrentControlSet\Services\wuauserv` | `Start`=4 (default 3) | Windows Update service disabled |
+| `HKLM\SYSTEM\CurrentControlSet\Services\UsoSvc` | `Start`=4 (default 2) | Update Orchestrator service disabled |
+
+Revert restores every value from the backup, or deletes it if it didn't exist before. The *Windows Update Medic Service* (`WaaSMedicSvc`) is left alone, because its key is protected even from Administrators. It may set `wuauserv` back to manual, and then the status shows *Partly*. The policies still block updates; apply again to disable the service again.
+
 ## Apps tab
 - **Scan:** `PackageManager.FindPackagesForUser("")` (current user). Each known app is matched by package name (`*` wildcard) and shown as Installed or Not installed. *Other installed apps* = Store- or developer-signed packages that aren't frameworks, resources or bundles, and aren't in the list.
 - **Uninstall:** `PackageManager.RemovePackageAsync(fullName)` for the current user. Removed apps are logged to `%LOCALAPPDATA%\Fastyourpc\removed-apps.tsv`, so *Get from Store* can open the exact Store page.

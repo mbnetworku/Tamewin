@@ -50,10 +50,10 @@ namespace Fastyourpc
 
             privacyPage = new TweakPage(engine, Log, "Privacy",
                 "Turn off what Windows, Office and Edge send to Microsoft. Revert puts back exactly what was there before.",
-                Catalog.Groups.Where(g => g != Catalog.Features));
+                Catalog.Groups.Where(g => g != Catalog.Features && g != Catalog.Updates));
             featuresPage = new TweakPage(engine, Log, "Windows features",
-                "Classic right-click menu and Windows protected print mode.",
-                new[] { Catalog.Features },
+                "Classic right-click menu, Windows protected print mode and Windows Update.",
+                new[] { Catalog.Features, Catalog.Updates },
                 new FlatButton("Restart Explorer", ButtonKind.Subtle, (s, e) => RestartExplorer()),
                 new FlatButton("Open printer settings", ButtonKind.Subtle,
                     (s, e) => Process.Start(new ProcessStartInfo("ms-settings:printers") { UseShellExecute = true })));
