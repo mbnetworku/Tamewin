@@ -346,39 +346,169 @@ namespace Fastyourpc
         }
     }
 
-    /// <summary>Scrolling list that stacks its visible children top to bottom at full width.</summary>
+    /// <summary>
+    /// Scrolling list that stacks its visible children top to bottom at full width.
+    /// Scrolls itself (no WinForms AutoScroll) and draws its own scrollbar in the right-hand gutter,
+    /// so the bar is always visible and works with the wheel, dragging, clicking and the keyboard.
+    /// </summary>
     public sealed class ListPanel : Panel
     {
+        int offset, contentHeight;
+        bool barHover, dragging;
+        int dragStartY, dragStartOffset;
+
         public ListPanel()
         {
-            AutoScroll = true;
             DoubleBuffered = true;
+            ResizeRedraw = true;
+            TabStop = false;
             BackColor = Window;
             Dock = DockStyle.Fill;
             Padding = new Padding(S(30), 0, S(30), S(20));
             Margin = Padding.Empty;
         }
 
-        public void ScrollBy(int wheelDelta)
+        int MaxOffset => Math.Max(0, contentHeight - ClientSize.Height);
+        bool CanScroll => MaxOffset > 0;
+
+        public void ScrollBy(int wheelDelta) => ScrollTo(offset - wheelDelta * S(60) / 120);
+
+        public void ScrollTo(int y)
         {
-            int y = -AutoScrollPosition.Y - wheelDelta * S(60) / 120;
-            AutoScrollPosition = new Point(0, Math.Max(0, y));
+            y = Math.Max(0, Math.Min(MaxOffset, y));
+            if (y == offset) return;
+            offset = y;
+            PerformLayout();
+            Invalidate();
         }
+
+        /// <summary>Scrolls just enough to show the control (used when Tab moves focus to a hidden row).</summary>
+        public void EnsureVisible(Control c)
+        {
+            if (c.Top < 0) ScrollTo(offset + c.Top - S(8));
+            else if (c.Bottom > ClientSize.Height) ScrollTo(offset + c.Bottom - ClientSize.Height + S(8));
+        }
+
+        protected override void OnControlAdded(ControlEventArgs e)
+        {
+            base.OnControlAdded(e);
+            e.Control.GotFocus += (s, a) => EnsureVisible((Control)s);
+            e.Control.KeyDown += (s, a) => ScrollKey(a);
+        }
+
+        void ScrollKey(KeyEventArgs e)
+        {
+            int page = Math.Max(S(60), ClientSize.Height - S(60));
+            switch (e.KeyCode)
+            {
+                case Keys.PageDown: ScrollTo(offset + page); break;
+                case Keys.PageUp: ScrollTo(offset - page); break;
+                case Keys.Home when e.Control: ScrollTo(0); break;
+                case Keys.End when e.Control: ScrollTo(MaxOffset); break;
+                default: return;
+            }
+            e.Handled = true;
+        }
+
+        protected override void OnMouseWheel(MouseEventArgs e) => ScrollBy(e.Delta);
 
         protected override void OnLayout(LayoutEventArgs e)
         {
             int w = ClientSize.Width - Padding.Horizontal;
             if (w <= 0) return;
-            int y = AutoScrollPosition.Y + Padding.Top;
+            int y = Padding.Top;
             foreach (Control c in Controls)
             {
                 if (!c.Visible) continue;
                 if (c is OptionRow row) row.FitWidth(w); else c.Width = w;
+                y += c.Height + c.Margin.Bottom;
+            }
+            contentHeight = y + Padding.Bottom;
+            offset = Math.Max(0, Math.Min(MaxOffset, offset));
+
+            y = Padding.Top - offset;
+            foreach (Control c in Controls)
+            {
+                if (!c.Visible) continue;
                 c.Location = new Point(Padding.Left, y);
                 y += c.Height + c.Margin.Bottom;
             }
-            var needed = new Size(0, y - AutoScrollPosition.Y + Padding.Bottom);
-            if (AutoScrollMinSize != needed) AutoScrollMinSize = needed;
+            Invalidate();
+        }
+
+        // ---- scrollbar, drawn in the right padding ----
+
+        Rectangle Track => new Rectangle(ClientSize.Width - S(16), S(4), S(10), ClientSize.Height - S(8));
+
+        Rectangle Thumb
+        {
+            get
+            {
+                var t = Track;
+                int h = Math.Max(S(40), (int)((long)t.Height * ClientSize.Height / Math.Max(1, contentHeight)));
+                h = Math.Min(h, t.Height);
+                int y = t.Top + (MaxOffset == 0 ? 0 : (int)((long)(t.Height - h) * offset / MaxOffset));
+                return new Rectangle(t.Left, y, t.Width, h);
+            }
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            base.OnPaint(e);
+            if (!CanScroll) return;
+            var g = e.Graphics;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            var thumb = Thumb;
+            bool wide = barHover || dragging;
+            if (wide)
+                using (var b = new SolidBrush(Sidebar))
+                using (var path = Round(Track, Track.Width / 2))
+                    g.FillPath(b, path);
+            if (!wide) thumb = Rectangle.Inflate(thumb, -S(2), 0);
+            using (var b = new SolidBrush(dragging ? Theme.Text : TextDim))
+            using (var path = Round(thumb, thumb.Width / 2))
+                g.FillPath(b, path);
+        }
+
+        protected override void OnMouseMove(MouseEventArgs e)
+        {
+            base.OnMouseMove(e);
+            if (dragging)
+            {
+                var t = Track;
+                int room = Math.Max(1, t.Height - Thumb.Height);
+                ScrollTo(dragStartOffset + (int)((long)(e.Y - dragStartY) * MaxOffset / room));
+                return;
+            }
+            bool over = CanScroll && e.X >= Track.Left - S(6);
+            if (over != barHover) { barHover = over; Invalidate(); }
+        }
+
+        protected override void OnMouseLeave(EventArgs e)
+        {
+            base.OnMouseLeave(e);
+            if (barHover && !dragging) { barHover = false; Invalidate(); }
+        }
+
+        protected override void OnMouseDown(MouseEventArgs e)
+        {
+            base.OnMouseDown(e);
+            if (e.Button != MouseButtons.Left || !CanScroll || e.X < Track.Left - S(6)) return;
+            var thumb = Thumb;
+            if (e.Y < thumb.Top) ScrollTo(offset - ClientSize.Height);            // click above: page up
+            else if (e.Y > thumb.Bottom) ScrollTo(offset + ClientSize.Height);    // click below: page down
+            else { dragging = true; dragStartY = e.Y; dragStartOffset = offset; Capture = true; }
+            Invalidate();
+        }
+
+        protected override void OnMouseUp(MouseEventArgs e)
+        {
+            base.OnMouseUp(e);
+            if (!dragging) return;
+            dragging = false;
+            Capture = false;
+            barHover = ClientRectangle.Contains(e.Location) && e.X >= Track.Left - S(6);
+            Invalidate();
         }
     }
 
