@@ -20,6 +20,7 @@ Command line:
   Tamewin.exe --apply  <ids|recommended>   apply options (comma-separated ids)
   Tamewin.exe --revert <ids|all>      put options back the way they were
   Tamewin.exe --apps                  scan apps: installed / not installed
+  Tamewin.exe --startmenu [glossy|glass]   open the Windows 7-style launcher
 
 Testing options:
   --test-root <key>   redirect every registry change to HKCU\<key> (nothing real is touched)
@@ -40,16 +41,25 @@ Testing options:
                 else if (a == "--theme") theme = Next();
                 else if (a == "--apply" || a == "--revert") { command = a; arg = Next(); }
                 else if (a == "--screenshot") { command = a; arg = Next(); shotPage = Next(); }
+                else if (a == "--startmenu") { command = a; arg = Next(); shotPage = Next(); }
                 else command = a;
             }
             var engine = new Engine(testRoot, backup);
             Theme.Init(theme == "dark" ? true : theme == "light" ? (bool?)false : null);
 
-            if (command == null || command == "--screenshot")
+            if (command == null || command == "--screenshot" || command == "--startmenu")
             {
                 Application.EnableVisualStyles();
                 Application.SetCompatibleTextRenderingDefault(false);
                 if (command == "--screenshot") return Screenshot(engine, arg, shotPage ?? "privacy");
+                if (command == "--startmenu")
+                {
+                    var s = StartSettings.Load();
+                    if (arg == "glossy") s.Style = StartStyle.Glossy;
+                    else if (arg == "glass" || arg == "liquidglass") s.Style = StartStyle.LiquidGlass;
+                    Application.Run(new StartMenuForm(s) { KeepOpen = shotPage == "pin" });
+                    return 0;
+                }
                 Application.Run(new MainForm(engine));
                 return 0;
             }

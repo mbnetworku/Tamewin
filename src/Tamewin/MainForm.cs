@@ -27,6 +27,8 @@ namespace Tamewin
         readonly List<(NavItem nav, Control page)> pages = new List<(NavItem, Control)>();
         readonly TweakPage privacyPage, featuresPage, speedPage;
         readonly AppsPage appsPage;
+        readonly Control startPage;
+        readonly StartSettings startSettings = StartSettings.Load();
 
         readonly bool showTestLabel;
 
@@ -63,6 +65,7 @@ namespace Tamewin
                     (s, e) => Process.Start(new ProcessStartInfo("ms-settings:printers") { UseShellExecute = true })),
                 new FlatButton("Switch to a local account", ButtonKind.Subtle, (s, e) => SwitchToLocalAccount()));
             appsPage = new AppsPage(Log);
+            startPage = BuildStartPage();
 
             var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, Margin = Padding.Empty, BackColor = Window };
             root.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, S(256)));
@@ -128,6 +131,7 @@ namespace Tamewin
             var navList = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.TopDown, WrapContents = false, Margin = Padding.Empty };
             AddPage(navList, "privacy", IconShield, "Privacy", privacyPage);
             AddPage(navList, "speed", IconRocket, "Make PC faster", speedPage);
+            AddPage(navList, "start", IconStart, "Start menu", startPage);
             AddPage(navList, "features", IconSettings, "Windows features", featuresPage);
             AddPage(navList, "apps", IconApps, "Apps (bloatware)", appsPage);
             AddPage(navList, "log", IconHistory, "Activity", BuildLogPage());
@@ -195,6 +199,56 @@ namespace Tamewin
                 Close();
             }
             catch { Log("Restart as Administrator was cancelled."); }
+        }
+
+        // ---------------- Start menu page ----------------
+
+        Control BuildStartPage()
+        {
+            var content = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false,
+                AutoScroll = true, BackColor = Window, Padding = new Padding(S(30), S(4), S(30), S(20)), Margin = Padding.Empty,
+            };
+
+            Label Section(string t) => new Label { Text = t, Font = Theme.Section, ForeColor = Theme.Text, AutoSize = true, Margin = new Padding(0, S(14), 0, S(6)) };
+            Label Note(string t) => new Label { Text = t, Font = Desc, ForeColor = TextDim, AutoSize = true, Margin = new Padding(0, 0, 0, S(8)) };
+
+            content.Controls.Add(Note("A Windows 7-style launcher with your real programs, shortcuts, search and a power button. " +
+                                      "It opens from here. It does not replace the real Start button."));
+
+            content.Controls.Add(Section("Style"));
+            var glossy = new RadioButton { Text = "Glossy (Aero)", Font = Body, ForeColor = Theme.Text, AutoSize = true, BackColor = Color.Transparent, Checked = startSettings.Style == StartStyle.Glossy, Margin = new Padding(0, S(2), 0, S(2)) };
+            var glass = new RadioButton { Text = "Liquid glass (blur)", Font = Body, ForeColor = Theme.Text, AutoSize = true, BackColor = Color.Transparent, Checked = startSettings.Style == StartStyle.LiquidGlass, Margin = new Padding(0, S(2), 0, S(2)) };
+            glossy.CheckedChanged += (s, e) => { if (glossy.Checked) { startSettings.Style = StartStyle.Glossy; startSettings.Save(); } };
+            glass.CheckedChanged += (s, e) => { if (glass.Checked) { startSettings.Style = StartStyle.LiquidGlass; startSettings.Save(); } };
+            content.Controls.Add(glossy);
+            content.Controls.Add(glass);
+
+            content.Controls.Add(Section("Shown on the right"));
+            content.Controls.Add(Note("Untick to hide a shortcut from the menu."));
+            foreach (var sc in Shortcut.Standard())
+            {
+                var cb = new CheckBox { Text = sc.Label, Font = Body, ForeColor = Theme.Text, AutoSize = true, BackColor = Color.Transparent, Checked = !startSettings.Hidden.Contains(sc.Key), Margin = new Padding(0, S(2), 0, S(2)) };
+                var key = sc.Key;
+                cb.CheckedChanged += (s, e) =>
+                {
+                    if (cb.Checked) startSettings.Hidden.Remove(key); else startSettings.Hidden.Add(key);
+                    startSettings.Save();
+                };
+                content.Controls.Add(cb);
+            }
+
+            var page = new PageLayout("Start menu", "A Windows 7-style launcher you open from Tamewin.", content);
+            page.Footer.Summary.Text = "Your choices are saved automatically.";
+            page.Footer.Buttons.Controls.Add(new FlatButton("Open Start menu", ButtonKind.Primary, (s, e) => OpenStartMenu(), IconStart));
+            return page;
+        }
+
+        void OpenStartMenu()
+        {
+            try { new StartMenuForm(startSettings).Show(); }
+            catch (Exception ex) { Log("Could not open the Start menu: " + ex.Message); }
         }
 
         // ---------------- activity page ----------------

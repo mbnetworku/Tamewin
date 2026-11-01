@@ -29,11 +29,13 @@ It follows your Windows light/dark setting:
 
 ![Privacy page, dark mode](docs/privacy-dark.png)
 
-The sidebar has five pages:
+The sidebar has six pages:
 
 **Privacy.** Every option is a card with a one-line explanation and a status label (*Applied*, *Partly*, *Not applied*). Tick what you want, then click **Apply selected**. To undo, tick it and click **Revert selected**. **Select recommended** ticks the safe set. Options marked *Needs admin* are grey until you click **Restart as admin** in the sidebar.
 
 **Make PC faster.** Opinionated speed tweaks, each opt-in and reversible: best-performance visual effects, no window animations, no menu delay, no transparency, no startup-app delay, no Game DVR recording, and (admin) turning off search indexing and SysMain. None are part of *recommended*; tick only what you want.
+
+**Start menu.** A Windows 7-style launcher: your real installed programs on the left (with a working search box), the familiar shortcuts on the right (Documents, Pictures, Music, Games, Computer, Control Panel, Devices and Printers, Default Programs, Help), and a power button (shut down / restart / sign out, each with a confirm). Two looks: **Glossy** (Aero) and **Liquid glass** (a real blur on Windows 10/11). You can hide any right-column shortcut. It opens from Tamewin or with `Tamewin.exe --startmenu`; it does **not** replace the real Start button or the Windows key — doing that cleanly needs a dedicated tool like Open-Shell. (No screenshot here: it would show the programs and user name on the PC that took it.)
 
 **Windows features.** Classic right-click menu, **handy extras** (*End task* on the taskbar right-click, keyboard typing suggestions), Windows protected print mode on/off, a **Switch to a local account** button, and **Block Windows Update completely** (with **Restart Explorer** and **Open printer settings** buttons). Blocking updates stops all Windows, security and driver updates, including manual checks; it needs admin and a restart, and shows a warning first. Tick it and click **Revert selected** to turn updates back on. See [TECHNICAL.md](TECHNICAL.md#block-windows-update-block_updates).
 

@@ -87,6 +87,7 @@ namespace Tamewin
 
         // Glyphs from Segoe Fluent Icons (Windows 11) / Segoe MDL2 Assets (Windows 10).
         public const string IconRocket = "";   // lightning bolt = speed
+        public const string IconStart = "";     // all apps = Start menu
         public const string IconShield = "", IconApps = "", IconSettings = "",
                             IconHistory = "", IconAdmin = "", IconSearch = "";
 
