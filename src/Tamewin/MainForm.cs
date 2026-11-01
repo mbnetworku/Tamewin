@@ -25,7 +25,7 @@ namespace Tamewin
             BorderStyle = BorderStyle.None, Font = new Font("Consolas", 9.5f),
         };
         readonly List<(NavItem nav, Control page)> pages = new List<(NavItem, Control)>();
-        readonly TweakPage privacyPage, featuresPage;
+        readonly TweakPage privacyPage, featuresPage, speedPage;
         readonly AppsPage appsPage;
 
         readonly bool showTestLabel;
@@ -51,13 +51,17 @@ namespace Tamewin
 
             privacyPage = new TweakPage(engine, Log, "Privacy",
                 "Turn off what Windows, Office and Edge send to Microsoft. Revert puts back exactly what was there before.",
-                Catalog.Groups.Where(g => g != Catalog.Features && g != Catalog.Updates));
+                Catalog.Groups.Where(g => g != Catalog.Features && g != Catalog.Updates && g != Catalog.Speed));
+            speedPage = new TweakPage(engine, Log, "Make PC faster",
+                "Turn off visual effects and background work to speed up a slower PC. Every change can be reverted.",
+                new[] { Catalog.Speed });
             featuresPage = new TweakPage(engine, Log, "Windows features",
-                "Classic right-click menu, Windows protected print mode and Windows Update.",
-                new[] { Catalog.Features, Catalog.Updates },
+                "Classic right-click menu, handy extras, protected print mode and Windows Update.",
+                new[] { Catalog.Features, Catalog.Extras, Catalog.Updates },
                 new FlatButton("Restart Explorer", ButtonKind.Subtle, (s, e) => RestartExplorer()),
                 new FlatButton("Open printer settings", ButtonKind.Subtle,
-                    (s, e) => Process.Start(new ProcessStartInfo("ms-settings:printers") { UseShellExecute = true })));
+                    (s, e) => Process.Start(new ProcessStartInfo("ms-settings:printers") { UseShellExecute = true })),
+                new FlatButton("Switch to a local account", ButtonKind.Subtle, (s, e) => SwitchToLocalAccount()));
             appsPage = new AppsPage(Log);
 
             var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, Margin = Padding.Empty, BackColor = Window };
@@ -123,6 +127,7 @@ namespace Tamewin
 
             var navList = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.TopDown, WrapContents = false, Margin = Padding.Empty };
             AddPage(navList, "privacy", IconShield, "Privacy", privacyPage);
+            AddPage(navList, "speed", IconRocket, "Make PC faster", speedPage);
             AddPage(navList, "features", IconSettings, "Windows features", featuresPage);
             AddPage(navList, "apps", IconApps, "Apps (bloatware)", appsPage);
             AddPage(navList, "log", IconHistory, "Activity", BuildLogPage());
@@ -152,6 +157,7 @@ namespace Tamewin
             }
             if (key == "apps") appsPage.ScanIfNeeded();
             if (key == "privacy") privacyPage.RefreshStates();
+            if (key == "speed") speedPage.RefreshStates();
             if (key == "features") featuresPage.RefreshStates();
         }
 
@@ -223,6 +229,21 @@ namespace Tamewin
             System.Threading.Thread.Sleep(1500);
             if (Process.GetProcessesByName("explorer").Length == 0) Process.Start("explorer.exe");
             Log("Explorer restarted.");
+        }
+
+        /// <summary>Opens the Windows page where the user switches a Microsoft account to a local one.
+        /// Tamewin never sees the password or changes the account itself.</summary>
+        void SwitchToLocalAccount()
+        {
+            if (MessageBox.Show(this,
+                    "This opens Windows Settings, where you can switch from a Microsoft account to a local account.\n\n" +
+                    "On the page that opens, click \"Sign in with a local account instead\" and follow Windows' steps. " +
+                    "You'll set a local username and password.\n\n" +
+                    "Tamewin does not change your account or see your password - Windows does it all. Open Settings now?",
+                    "Switch to a local account", MessageBoxButtons.YesNo, MessageBoxIcon.Information) != DialogResult.Yes) return;
+            try { Process.Start(new ProcessStartInfo("ms-settings:yourinfo") { UseShellExecute = true }); }
+            catch { Process.Start(new ProcessStartInfo("ms-settings:otherusers") { UseShellExecute = true }); }
+            Log("Opened Settings for switching to a local account.");
         }
     }
 

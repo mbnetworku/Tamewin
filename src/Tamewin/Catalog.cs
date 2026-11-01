@@ -17,8 +17,10 @@ namespace Tamewin
         public const string Activity = "Activity, location & AI";
         public const string Features = "Windows features";
         public const string Updates = "Windows Update";
+        public const string Speed = "Make PC faster";
+        public const string Extras = "Handy extras";
 
-        public static readonly string[] Groups = { Tips, Search, Typing, Office, Diag, Activity, Features, Updates };
+        public static readonly string[] Groups = { Tips, Search, Typing, Office, Diag, Activity, Features, Extras, Updates, Speed };
 
         const string RestartExplorer = "Restart Explorer (or sign out) to see the change";
         const string RestartPc = "Restart the PC for this to take effect";
@@ -185,6 +187,14 @@ namespace Tamewin
                 LM(WPP, "WindowsProtectedPrintGroupPolicyState", null), LM(WPP, "WindowsProtectedPrintOobeConfigComplete", null))
                 .ConflictsWith("wpp_on").Needs(RestartPc).Optional(),
 
+            // ---------------- Handy extras ----------------
+            T(Extras, "end_task", "Add 'End task' to the taskbar right-click menu",
+                "Right-click any app on the taskbar and you get an 'End task' option that force-closes a frozen app without Task Manager.",
+                CU(@"Software\Microsoft\Windows\CurrentVersion\TaskbarDeveloperSettings", "TaskbarEndTask", 1, 0)).Optional(),
+            T(Extras, "kbd_suggestions", "Turn on typing suggestions for the keyboard",
+                "Windows shows word suggestions as you type on the normal (physical) keyboard, so you can finish words faster.",
+                CU(@"Software\Microsoft\TabletTip\1.7", "EnableHwkbTextPrediction", 1, 0)).Optional(),
+
             // ---------------- Windows Update ----------------
             T(Updates, "block_updates", "Block Windows Update completely",
                 "No Windows, security or driver updates are downloaded or installed, automatically or by hand. " +
@@ -203,6 +213,38 @@ namespace Tamewin
                       "Microsoft Store downloads and some Windows Defender updates may also stop. " +
                       "Windows may switch the update service back on by itself; if the status shows 'Partly', apply it again. " +
                       "Revert it at least once a month to install security updates.")
+                .Needs(RestartPc).Optional(),
+
+            // ---------------- Make PC faster ----------------
+            T(Speed, "perf_visualfx", "Adjust Windows for best performance",
+                "Sets Windows to 'best performance', which turns off most of the fancy visual effects (shadows, fades, smooth-scrolling).",
+                CU(@"Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects", "VisualFXSetting", 2))
+                .Needs(SignOut).Optional(),
+            T(Speed, "perf_animations", "Turn off window animations",
+                "Windows minimises, maximises and opens windows instantly instead of animating them. Feels snappier on slower PCs.",
+                CU(@"Control Panel\Desktop\WindowMetrics", "MinAnimate", "0", "1")).Needs(SignOut).Optional(),
+            T(Speed, "perf_menu_delay", "Remove the menu open delay",
+                "Menus open the moment you hover, instead of after a short pause.",
+                CU(@"Control Panel\Desktop", "MenuShowDelay", "0", "400")).Needs(SignOut).Optional(),
+            T(Speed, "perf_transparency", "Turn off transparency effects",
+                "The Start menu, taskbar and windows become solid instead of see-through, which uses less graphics power.",
+                CU(@"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize", "EnableTransparency", 0, 1)).Optional(),
+            T(Speed, "perf_startup_delay", "Remove the delay before startup apps run",
+                "Startup apps launch right away after sign-in, instead of after Windows' built-in pause.",
+                CU(@"Software\Microsoft\Windows\CurrentVersion\Explorer\Serialize", "StartupDelayInMSec", 0)).Optional(),
+            T(Speed, "perf_gamedvr", "Turn off Game DVR background recording",
+                "Stops Windows recording your games in the background, which frees CPU and GPU. Xbox Game Bar still opens if you want it.",
+                CU(@"System\GameConfigStore", "GameDVR_Enabled", 0, 1),
+                CU(@"Software\Microsoft\Windows\CurrentVersion\GameDVR", "AppCaptureEnabled", 0, 1)).Optional(),
+            T(Speed, "perf_search_index", "Turn off search indexing",
+                "Disables the Windows Search service. Uses less disk and CPU, but searching in Start and File Explorer becomes much slower.",
+                LM(@"SYSTEM\CurrentControlSet\Services\WSearch", "Start", 4, 2))
+                .Warn("Searching your files in Start and File Explorer will become slow. Turn this back on if you rely on search.")
+                .Needs(RestartPc).Optional(),
+            T(Speed, "perf_sysmain", "Turn off SysMain (Superfetch)",
+                "Disables the SysMain service, which preloads apps into memory. Can cut high disk usage on some PCs; on others apps may open a little slower.",
+                LM(@"SYSTEM\CurrentControlSet\Services\SysMain", "Start", 4, 2))
+                .Warn("On hard-drive (non-SSD) PCs some apps may open slightly slower. Safe to turn back on if you notice that.")
                 .Needs(RestartPc).Optional(),
         };
 

@@ -10,11 +10,14 @@ block updates — all reversible with one click.
 Windows 10/11 tools, available as one portable **`Tamewin.exe`** or as PowerShell scripts:
 
 - **Privacy & settings**: turn off Windows, Office and Edge data sharing, telemetry and diagnostic data, tips and ads. Undo puts back exactly what was there before.
+- **Make PC faster**: turn off visual effects, animations, transparency, Game DVR recording, search indexing and SysMain to speed up a slower PC.
 - **Apps (bloatware)**: scans which preinstalled apps are installed and which aren't, rates each one (safe / think first / critical), says what stops working if you remove it, and uninstalls the ones you pick.
+- **Handy extras**: add **End task** to the taskbar right-click menu, and turn on **keyboard typing suggestions**.
 - **Classic right-click menu** and **Windows protected print mode** on/off.
 - **Block Windows Update** completely, and turn it back on with one click.
+- **Switch to a local account**: a button that opens the Windows page where you do it yourself.
 
-Nothing touches your Microsoft account or sign-in.
+The app never changes your Microsoft account or sees your password. The local-account button only opens Windows' own Settings page.
 
 ## Tamewin.exe (recommended)
 
@@ -26,11 +29,13 @@ It follows your Windows light/dark setting:
 
 ![Privacy page, dark mode](docs/privacy-dark.png)
 
-The sidebar has four pages:
+The sidebar has five pages:
 
 **Privacy.** Every option is a card with a one-line explanation and a status label (*Applied*, *Partly*, *Not applied*). Tick what you want, then click **Apply selected**. To undo, tick it and click **Revert selected**. **Select recommended** ticks the safe set. Options marked *Needs admin* are grey until you click **Restart as admin** in the sidebar.
 
-**Windows features.** Classic right-click menu, Windows protected print mode on/off, and **Block Windows Update completely** (with **Restart Explorer** and **Open printer settings** buttons). Blocking updates stops all Windows, security and driver updates, including manual checks. It needs admin and a restart, and shows a warning first. Tick it and click **Revert selected** to turn updates back on. See [TECHNICAL.md](TECHNICAL.md#block-windows-update-block_updates).
+**Make PC faster.** Opinionated speed tweaks, each opt-in and reversible: best-performance visual effects, no window animations, no menu delay, no transparency, no startup-app delay, no Game DVR recording, and (admin) turning off search indexing and SysMain. None are part of *recommended*; tick only what you want.
+
+**Windows features.** Classic right-click menu, **handy extras** (*End task* on the taskbar right-click, keyboard typing suggestions), Windows protected print mode on/off, a **Switch to a local account** button, and **Block Windows Update completely** (with **Restart Explorer** and **Open printer settings** buttons). Blocking updates stops all Windows, security and driver updates, including manual checks; it needs admin and a restart, and shows a warning first. Tick it and click **Revert selected** to turn updates back on. See [TECHNICAL.md](TECHNICAL.md#block-windows-update-block_updates).
 
 ![Windows features page](docs/features-light.png)
 

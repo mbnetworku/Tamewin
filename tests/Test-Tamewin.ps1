@@ -48,6 +48,16 @@ $r = T '--apply', 'block_updates'
 Check 'block_updates applied' ((Status 'block_updates') -match 'Applied' -and (Get-ItemProperty $wuKey).Start -eq 4 -and
     (Get-ItemProperty "HKCU:\$root\LM\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate").WUServer -eq 'http://127.0.0.1')
 
+Check 'perf_menu_delay not in recommended' ((Status 'perf_menu_delay') -match 'NotApplied')
+$r = T '--apply', 'end_task,perf_menu_delay'
+$endKey = "HKCU:\$root\CU\Software\Microsoft\Windows\CurrentVersion\TaskbarDeveloperSettings"
+$deskKey = "HKCU:\$root\CU\Control Panel\Desktop"
+Check 'end_task + perf_menu_delay applied' ((Status 'end_task') -match 'Applied' -and (Get-ItemProperty $endKey).TaskbarEndTask -eq 1 -and
+    (Get-ItemProperty $deskKey).MenuShowDelay -eq '0')
+$r = T '--revert', 'end_task,perf_menu_delay'
+Check 'end_task + perf_menu_delay reverted (values removed)' ((Status 'end_task') -match 'NotApplied' -and
+    -not (Test-Path $endKey) -and -not ((Get-ItemProperty $deskKey -ErrorAction SilentlyContinue).PSObject.Properties.Name -contains 'MenuShowDelay'))
+
 $r = T '--apply', 'ad_id'
 Check 'second apply keeps original backup' ((Get-Content $backup | Select-String 'ad_id' | Select-String "`t1`tDWord`t1`t").Count -eq 1)
 
