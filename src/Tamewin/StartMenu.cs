@@ -6,7 +6,9 @@ using System.Drawing.Drawing2D;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Security.Principal;
 using System.Windows.Forms;
+using Microsoft.Win32;
 using static Tamewin.Theme;
 
 namespace Tamewin
@@ -136,6 +138,53 @@ namespace Tamewin
         }
     }
 
+    /// <summary>Loads the user's real Windows account picture, so the launcher shows the same photo as the real menu.</summary>
+    static class AccountPicture
+    {
+        public static Image Load(int size)
+        {
+            // Registry: HKLM\...\AccountPicture\Users\<SID> holds paths to the user's picture at several sizes.
+            try
+            {
+                var sid = WindowsIdentity.GetCurrent().User?.Value;
+                if (sid != null)
+                    using (var k = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\AccountPicture\Users\" + sid))
+                        if (k != null)
+                            foreach (var name in new[] { "Image448", "Image192", "Image96", "Image64", "Image48", "Image40", "Image32" })
+                                if (k.GetValue(name) is string path && File.Exists(path))
+                                    return Rounded(path, size);
+            }
+            catch { }
+            // Fallback: the generic default account picture.
+            try
+            {
+                var def = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+                    @"Microsoft\User Account Pictures\user.png");
+                if (File.Exists(def)) return Rounded(def, size);
+            }
+            catch { }
+            return null;
+        }
+
+        static Image Rounded(string path, int size)
+        {
+            using (var src = Image.FromFile(path))
+            {
+                var bmp = new Bitmap(size, size);
+                using (var g = Graphics.FromImage(bmp))
+                {
+                    g.SmoothingMode = SmoothingMode.AntiAlias;
+                    using (var clip = Theme.Round(new Rectangle(0, 0, size, size), size / 6))
+                    {
+                        g.SetClip(clip);
+                        g.DrawImage(src, new Rectangle(0, 0, size, size));
+                    }
+                }
+                return bmp;
+            }
+        }
+    }
+
     /// <summary>Gets the real icon for a file or shortcut (resolves .lnk targets).</summary>
     static class ShellIcon
     {
@@ -209,6 +258,11 @@ namespace Tamewin
         readonly GlassPanel progList = new GlassPanel { AutoScroll = true };
         readonly TextBox search = new TextBox();
 
+        // Windows 7 colours: white left pane, dark glass right column.
+        static readonly Color LeftTop = Color.FromArgb(255, 255, 255), LeftBottom = Color.FromArgb(244, 248, 252);
+        static readonly Color ProgInk = Color.FromArgb(28, 42, 64);
+        static readonly Color RightInk = Color.FromArgb(238, 243, 250), RightDim = Color.FromArgb(205, 216, 232);
+
         public StartMenuForm(StartSettings settings)
         {
             this.settings = settings;
@@ -217,24 +271,25 @@ namespace Tamewin
             FormBorderStyle = FormBorderStyle.None;
             ShowInTaskbar = false;
             StartPosition = FormStartPosition.Manual;
-            Size = new Size(S(440), S(560));
+            Size = new Size(S(392), S(500));
             KeyPreview = true;
             DoubleBuffered = true;
-            BackColor = settings.Style == StartStyle.LiquidGlass ? Color.FromArgb(20, 28, 40) : Color.FromArgb(222, 236, 250);
+            BackColor = Color.FromArgb(24, 32, 46);
 
             BuildLayout();
             FillPrograms(null);
         }
 
-        bool Light => settings.Style == StartStyle.Glossy;
-        Color Ink => Light ? Color.FromArgb(20, 40, 70) : Color.White;
-        Color InkDim => Light ? Color.FromArgb(70, 90, 120) : Color.FromArgb(210, 220, 235);
+        int Frame => S(6);
+        int RightW => S(150);
+        int RightX => Width - RightW;
+        Rectangle LeftPane => Rectangle.FromLTRB(Frame, Frame, RightX, Height - Frame);
 
         protected override void OnShown(EventArgs e)
         {
             base.OnShown(e);
+            Region = new Region(Round(new Rectangle(0, 0, Width, Height), S(9)));
             Glass.Apply(this, settings.Style);
-            // bottom-left, like the real Start menu
             var wa = Screen.PrimaryScreen.WorkingArea;
             Location = new Point(wa.Left + S(8), wa.Bottom - Height - S(8));
             search.Focus();
@@ -243,55 +298,55 @@ namespace Tamewin
         protected override void OnDeactivate(EventArgs e) { base.OnDeactivate(e); if (!KeepOpen) Close(); }
         protected override void OnKeyDown(KeyEventArgs e) { if (e.KeyCode == Keys.Escape) Close(); base.OnKeyDown(e); }
 
-        const int RightColW = 150, PowerH = 44, SearchH = 34;
-
         void BuildLayout()
         {
-            int pad = S(12);
-            int rightW = S(RightColW);
-            int powerH = S(PowerH);
-            int searchH = S(SearchH);
+            var lp = LeftPane;
+            int searchH = S(30), allProgH = S(30), gap = S(2);
 
-            // Left program list
-            progList.Bounds = new Rectangle(pad, pad, Width - rightW - pad * 3, Height - pad * 2 - searchH - powerH);
-            progList.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Bottom;
+            // Left: program list, then an "All Programs" row and a search box at the bottom.
+            progList.Bounds = new Rectangle(lp.Left + S(3), lp.Top + S(3), lp.Width - S(6), lp.Height - S(6) - allProgH - searchH - gap * 2);
             Controls.Add(progList);
 
-            // Search box, bottom-left
+            var allProg = new StartAllPrograms { Bounds = new Rectangle(lp.Left + S(3), progList.Bottom + gap, lp.Width - S(6), allProgH) };
+            allProg.Click += (s, e) => { search.Clear(); FillPrograms(null); search.Focus(); };
+            Controls.Add(allProg);
+
             search.BorderStyle = BorderStyle.FixedSingle;
             search.Font = Body;
-            search.BackColor = Light ? Color.White : Color.FromArgb(40, 52, 68);
-            search.ForeColor = Ink;
-            search.Bounds = new Rectangle(pad, Height - pad - searchH, Width - rightW - pad * 3, searchH);
-            search.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
+            search.BackColor = Color.White;
+            search.ForeColor = ProgInk;
+            search.Bounds = new Rectangle(lp.Left + S(3), lp.Bottom - searchH - S(3), lp.Width - S(6), searchH);
             search.TextChanged += (s, e) => FillPrograms(search.Text);
-            search.SetPlaceholder("Search programs");
+            search.SetPlaceholder("Search programs and files");
             Controls.Add(search);
 
-            // Right column of shortcuts
-            int rx = Width - rightW - pad;
-            int y = pad;
-            var head = new Label
+            // Right: avatar, user name, shortcuts, and a Shut down button.
+            int rx = RightX + S(8), rw = RightW - S(14);
+            int av = S(46), ax = RightX + (RightW - av) / 2;
+            Controls.Add(new StartAvatar(AccountPicture.Load(av), Environment.UserName) { Bounds = new Rectangle(ax, Frame + S(8), av, av) });
+            var name = new Label
             {
-                Text = Environment.UserName, Font = new Font("Segoe UI Semibold", 12f), ForeColor = Ink,
-                AutoSize = false, TextAlign = ContentAlignment.MiddleCenter,
-                Bounds = new Rectangle(rx, y, rightW, S(40)), BackColor = Color.Transparent,
+                Text = Environment.UserName, Font = new Font("Segoe UI Semibold", 10f), ForeColor = RightInk,
+                AutoSize = false, TextAlign = ContentAlignment.MiddleCenter, BackColor = Color.Transparent,
+                Bounds = new Rectangle(RightX + S(2), Frame + S(56), RightW - S(4), S(20)),
             };
-            Controls.Add(head);
-            y += S(48);
+            Controls.Add(name);
+
+            var linkFont = new Font("Segoe UI", 8.5f);
+            int y = Frame + S(84);
             foreach (var sc in Shortcut.Standard())
             {
                 if (settings.Hidden.Contains(sc.Key)) continue;
-                var link = new StartLink(sc.Label, Ink, InkDim) { Bounds = new Rectangle(rx, y, rightW, S(26)) };
+                var link = new StartLink(sc.Label, RightInk, RightDim) { Font = linkFont, Bounds = new Rectangle(rx, y, rw, S(24)) };
                 var captured = sc;
                 link.Click += (s, e) => { captured.Open(); Close(); };
                 Controls.Add(link);
-                y += S(27);
+                y += S(25);
             }
 
-            // Power button, bottom-right
-            var power = new StartLink("  Shut down", Ink, InkDim) { Font = new Font("Segoe UI", 10f), Bounds = new Rectangle(rx, Height - pad - powerH, rightW, S(30)) };
-            power.Click += (s, e) => PowerMenu();
+            var power = new StartPower { Bounds = new Rectangle(rx, Height - Frame - S(36), rw, S(28)) };
+            power.ShutDown += (s, e) => Power("/s");
+            power.MoreOptions += (s, e) => PowerMenu();
             Controls.Add(power);
         }
 
@@ -305,18 +360,18 @@ namespace Tamewin
             if (!string.IsNullOrWhiteSpace(filter))
                 items = allPrograms.Where(p => p.Name.IndexOf(filter.Trim(), StringComparison.OrdinalIgnoreCase) >= 0);
 
-            int y = 0, w = progList.ClientSize.Width - S(4);
+            int y = S(2), w = progList.ClientSize.Width - S(4);
             foreach (var p in items.Take(200))
             {
-                if (p.Icon == null) p.Icon = ShellIcon.For(p.Path, S(24));
-                var item = new StartProgram(p, Ink) { Bounds = new Rectangle(0, y, w, S(34)) };
+                if (p.Icon == null) p.Icon = ShellIcon.For(p.Path, S(20));
+                var item = new StartProgram(p, ProgInk) { Bounds = new Rectangle(S(2), y, w, S(29)) };
                 var captured = p;
                 item.Click += (s, e) => { Launch(captured); Close(); };
                 progList.Controls.Add(item);
-                y += S(34);
+                y += S(29);
             }
             if (progList.Controls.Count == 0)
-                progList.Controls.Add(new Label { Text = "No programs found.", ForeColor = InkDim, AutoSize = true, Location = new Point(S(6), S(6)), BackColor = Color.Transparent });
+                progList.Controls.Add(new Label { Text = "No programs found.", ForeColor = Color.Gray, AutoSize = true, Location = new Point(S(8), S(8)), BackColor = Color.Transparent });
             progList.ResumeLayout();
         }
 
@@ -331,7 +386,7 @@ namespace Tamewin
             menu.Items.Add("Shut down", null, (s, e) => Power("/s"));
             menu.Items.Add("Restart", null, (s, e) => Power("/r"));
             menu.Items.Add("Sign out", null, (s, e) => Power("/l"));
-            menu.Show(this, new Point(Width - S(160), Height - S(50)));
+            menu.Show(this, new Point(RightX, Height - Frame - S(12)));
         }
 
         void Power(string flag)
@@ -351,33 +406,31 @@ namespace Tamewin
         {
             base.OnPaintBackground(e);
             PaintBgRect(e.Graphics, ClientRectangle);
-            using (var pen = new Pen(Light ? Color.FromArgb(150, 160, 185) : Color.FromArgb(70, 160, 180, 210)))
-                e.Graphics.DrawRectangle(pen, 0, 0, ClientRectangle.Width - 1, ClientRectangle.Height - 1);
+            using (var pen = new Pen(Color.FromArgb(120, 150, 185)))
+            using (var path = Round(new Rectangle(0, 0, ClientRectangle.Width - 1, ClientRectangle.Height - 1), S(9)))
+                e.Graphics.DrawPath(pen, path);
         }
 
-        /// <summary>The window's gradient over the whole client rect. Children call <see cref="PaintBg"/>
-        /// so they draw the matching slice under themselves instead of a black box.</summary>
+        /// <summary>Paints the whole window: dark glass frame + right column, white left pane.
+        /// Children call <see cref="PaintBg"/> so they draw the matching slice under themselves.</summary>
         void PaintBgRect(Graphics g, Rectangle r)
         {
-            if (Light)
-            {
-                using (var b = new LinearGradientBrush(r, Color.FromArgb(235, 244, 252), Color.FromArgb(200, 220, 242), 90f))
-                    g.FillRectangle(b, r);
-                var top = new Rectangle(r.X, r.Y, r.Width, r.Height / 3);
-                using (var b = new LinearGradientBrush(top, Color.FromArgb(120, 255, 255, 255), Color.FromArgb(10, 255, 255, 255), 90f))
-                    g.FillRectangle(b, top);
-            }
+            // Dark glass frame / right column
+            if (settings.Style == StartStyle.LiquidGlass)
+                using (var b = new SolidBrush(Color.FromArgb(150, 20, 28, 42))) g.FillRectangle(b, r);   // translucent: real blur shows behind
             else
-            {
-                using (var b = new LinearGradientBrush(r, Color.FromArgb(234, 34, 44, 64), Color.FromArgb(234, 18, 25, 38), 90f))
-                    g.FillRectangle(b, r);
-                var top = new Rectangle(r.X, r.Y, r.Width, r.Height / 3);
-                using (var b = new LinearGradientBrush(top, Color.FromArgb(40, 255, 255, 255), Color.FromArgb(0, 255, 255, 255), 90f))
-                    g.FillRectangle(b, top);
-            }
+                using (var b = new LinearGradientBrush(r, Color.FromArgb(46, 58, 80), Color.FromArgb(22, 30, 46), 90f)) g.FillRectangle(b, r);
+            // top sheen on the dark glass
+            var sheen = new Rectangle(r.X, r.Y, r.Width, r.Height / 4);
+            using (var b = new LinearGradientBrush(sheen, Color.FromArgb(45, 255, 255, 255), Color.FromArgb(0, 255, 255, 255), 90f))
+                g.FillRectangle(b, sheen);
+            // White left pane (always opaque, for readable program names)
+            var lp = LeftPane;
+            using (var b = new LinearGradientBrush(lp, LeftTop, LeftBottom, 90f)) g.FillRectangle(b, lp);
+            using (var pen = new Pen(Color.FromArgb(180, 196, 214))) g.DrawRectangle(pen, lp);
         }
 
-        /// <summary>Paints the window gradient slice that sits under <paramref name="child"/>.</summary>
+        /// <summary>Paints the slice of the window that sits under <paramref name="child"/>.</summary>
         public void PaintBg(Graphics g, Control child)
         {
             var origin = PointToClient(child.PointToScreen(Point.Empty));
@@ -388,7 +441,7 @@ namespace Tamewin
         }
     }
 
-    /// <summary>A scrolling panel that paints the Start menu's gradient under itself.</summary>
+    /// <summary>A scrolling panel that paints the Start menu background under itself.</summary>
     sealed class GlassPanel : Panel
     {
         public GlassPanel() { DoubleBuffered = true; }
@@ -399,31 +452,131 @@ namespace Tamewin
         }
     }
 
-    /// <summary>A program row in the launcher: icon + name, with hover.</summary>
+    /// <summary>A program row: icon + name, with a soft hover highlight. Lives on the white left pane.</summary>
     sealed class StartProgram : PaintedControl
     {
         readonly ProgramEntry prog;
         readonly Color ink;
 
-        public StartProgram(ProgramEntry prog, Color ink)
-        {
-            this.prog = prog; this.ink = ink;
-            Cursor = Cursors.Hand;
-        }
+        public StartProgram(ProgramEntry prog, Color ink) { this.prog = prog; this.ink = ink; Cursor = Cursors.Hand; }
 
         protected override void OnPaint(PaintEventArgs e)
         {
             var g = e.Graphics;
             if (FindForm() is StartMenuForm m) m.PaintBg(g, this); else g.Clear(BackColor);
             if (Hover)
-                using (var b = new SolidBrush(Color.FromArgb(90, 120, 170, 230)))
-                using (var path = Round(new Rectangle(0, 0, Width - 1, Height - 1), S(4)))
+            {
+                var rr = new Rectangle(0, 0, Width - 1, Height - 1);
+                using (var b = new LinearGradientBrush(rr, Color.FromArgb(230, 240, 252), Color.FromArgb(205, 224, 246), 90f))
+                using (var path = Round(rr, S(4)))
                     g.FillPath(b, path);
-            int ic = S(24), pad = S(6);
+                using (var pen = new Pen(Color.FromArgb(160, 196, 230)))
+                using (var path = Round(rr, S(4)))
+                    g.DrawPath(pen, path);
+            }
+            int ic = S(20), pad = S(6);
             if (prog.Icon != null) g.DrawImage(prog.Icon, pad, (Height - ic) / 2, ic, ic);
             var textR = new Rectangle(pad + ic + S(8), 0, Width - pad - ic - S(10), Height);
             TextRenderer.DrawText(g, prog.Name, Theme.Body, textR, ink,
                 TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix | TextFormatFlags.EndEllipsis);
+        }
+    }
+
+    /// <summary>The "All Programs" row at the bottom of the left pane, with a divider above it.</summary>
+    sealed class StartAllPrograms : PaintedControl
+    {
+        public StartAllPrograms() { Cursor = Cursors.Hand; }
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            var g = e.Graphics;
+            if (FindForm() is StartMenuForm m) m.PaintBg(g, this); else g.Clear(BackColor);
+            using (var pen = new Pen(Color.FromArgb(205, 215, 228))) g.DrawLine(pen, S(2), 0, Width - S(2), 0);
+            if (Hover)
+                using (var b = new SolidBrush(Color.FromArgb(220, 232, 246)))
+                using (var path = Round(new Rectangle(0, S(2), Width - 1, Height - S(3)), S(4)))
+                    g.FillPath(b, path);
+            var box = new Rectangle(S(6), (Height - S(16)) / 2, S(16), S(16));
+            using (var b = new LinearGradientBrush(box, Color.FromArgb(120, 170, 90), Color.FromArgb(70, 120, 50), 90f))
+                g.FillRectangle(b, box);
+            TextRenderer.DrawText(g, "▶", new Font("Segoe UI", 7f), box, Color.White,
+                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix);
+            var tr = new Rectangle(S(28), 0, Width - S(30), Height);
+            TextRenderer.DrawText(g, "All Programs", Theme.BodyBold, tr, Color.FromArgb(28, 42, 64),
+                TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix);
+        }
+    }
+
+    /// <summary>The user picture tile: a rounded gradient square with the user's initial.</summary>
+    sealed class StartAvatar : PaintedControl
+    {
+        readonly Image photo;
+        readonly string initial;
+        public StartAvatar(Image photo, string user)
+        {
+            this.photo = photo;
+            initial = string.IsNullOrEmpty(user) ? "?" : user.Substring(0, 1).ToUpperInvariant();
+        }
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            var g = e.Graphics;
+            if (FindForm() is StartMenuForm m) m.PaintBg(g, this);
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            var r = new Rectangle(0, 0, Width - 1, Height - 1);
+            if (photo != null) g.DrawImage(photo, 0, 0, Width, Height);
+            else
+                using (var b = new LinearGradientBrush(r, Color.FromArgb(246, 170, 90), Color.FromArgb(206, 96, 60), 45f))
+                using (var path = Round(r, S(8)))
+                {
+                    g.FillPath(b, path);
+                    TextRenderer.DrawText(g, initial, new Font("Segoe UI Semibold", 18f), r, Color.White,
+                        TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix);
+                }
+            // white beveled frame, like the Windows 7 picture tile
+            using (var pen = new Pen(Color.White, S(2)))
+            using (var path = Round(r, S(8)))
+                g.DrawPath(pen, path);
+            using (var pen = new Pen(Color.FromArgb(120, 120, 130)))
+            using (var path = Round(new Rectangle(0, 0, Width - 1, Height - 1), S(8)))
+                g.DrawPath(pen, path);
+        }
+    }
+
+    /// <summary>Windows 7-style Shut down button: a beveled button with a split "more options" arrow.</summary>
+    sealed class StartPower : PaintedControl
+    {
+        public event EventHandler ShutDown, MoreOptions;
+        public StartPower() { Cursor = Cursors.Hand; }
+        int ArrowW => S(22);
+
+        protected override void OnMouseUp(MouseEventArgs e)
+        {
+            if (e.Button == MouseButtons.Left)
+            {
+                if (e.X >= Width - ArrowW) MoreOptions?.Invoke(this, EventArgs.Empty);
+                else ShutDown?.Invoke(this, EventArgs.Empty);
+            }
+            base.OnMouseUp(e);
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            var g = e.Graphics;
+            if (FindForm() is StartMenuForm m) m.PaintBg(g, this);
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            var r = new Rectangle(0, 0, Width - 1, Height - 1);
+            using (var b = new LinearGradientBrush(r, Color.FromArgb(252, 252, 252), Color.FromArgb(222, 226, 232), 90f))
+            using (var path = Round(r, S(4)))
+                g.FillPath(b, path);
+            using (var pen = new Pen(Color.FromArgb(120, 130, 146)))
+            using (var path = Round(r, S(4)))
+                g.DrawPath(pen, path);
+            var textR = new Rectangle(0, 0, Width - ArrowW, Height);
+            TextRenderer.DrawText(g, "Shut down", Theme.Body, textR, Color.FromArgb(30, 40, 56),
+                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix);
+            using (var pen = new Pen(Color.FromArgb(150, 158, 172))) g.DrawLine(pen, Width - ArrowW, S(3), Width - ArrowW, Height - S(4));
+            var arrowR = new Rectangle(Width - ArrowW, 0, ArrowW, Height);
+            TextRenderer.DrawText(g, "▸", new Font("Segoe UI", 9f), arrowR, Color.FromArgb(40, 50, 66),
+                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix);
         }
     }
 
@@ -437,10 +590,20 @@ namespace Tamewin
         {
             var g = e.Graphics;
             if (FindForm() is StartMenuForm m) m.PaintBg(g, this); else g.Clear(BackColor);
-            var r = new Rectangle(S(4), 0, Width - S(6), Height);
-            using (var f = new Font(Font, Hover ? FontStyle.Underline : FontStyle.Regular))
-                TextRenderer.DrawText(g, Text, f, r, Hover ? ink : dim,
-                    TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix | TextFormatFlags.EndEllipsis);
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            if (Hover)
+            {
+                var rr = new Rectangle(0, S(1), Width - 1, Height - S(2));
+                using (var b = new LinearGradientBrush(rr, Color.FromArgb(70, 255, 255, 255), Color.FromArgb(24, 255, 255, 255), 90f))
+                using (var path = Round(rr, S(4)))
+                    g.FillPath(b, path);
+                using (var pen = new Pen(Color.FromArgb(90, 255, 255, 255)))
+                using (var path = Round(rr, S(4)))
+                    g.DrawPath(pen, path);
+            }
+            var r = new Rectangle(S(8), 0, Width - S(10), Height);
+            TextRenderer.DrawText(g, Text, Font, r, Hover ? ink : dim,
+                TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix | TextFormatFlags.EndEllipsis);
         }
     }
 }

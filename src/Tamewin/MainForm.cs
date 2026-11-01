@@ -84,10 +84,32 @@ namespace Tamewin
             ShowPage("privacy");
         }
 
+        // ---- global hotkey: Ctrl+Shift+S opens the Start menu launcher while Tamewin is running ----
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        static extern bool RegisterHotKey(IntPtr hWnd, int id, uint fsModifiers, uint vk);
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        static extern bool UnregisterHotKey(IntPtr hWnd, int id);
+        const int HotkeyId = 0xB001, WM_HOTKEY = 0x0312;
+        bool hotkeyOn;
+
         protected override void OnHandleCreated(EventArgs e)
         {
             ApplyTitleBar(Handle);
             base.OnHandleCreated(e);
+            // MOD_CONTROL(2) | MOD_SHIFT(4) | MOD_NOREPEAT(0x4000), VK 'S' = 0x53
+            hotkeyOn = RegisterHotKey(Handle, HotkeyId, 0x2 | 0x4 | 0x4000, 0x53);
+        }
+
+        protected override void WndProc(ref Message m)
+        {
+            if (m.Msg == WM_HOTKEY && m.WParam.ToInt32() == HotkeyId) OpenStartMenu();
+            base.WndProc(ref m);
+        }
+
+        protected override void OnFormClosed(FormClosedEventArgs e)
+        {
+            if (hotkeyOn) UnregisterHotKey(Handle, HotkeyId);
+            base.OnFormClosed(e);
         }
 
         // ---------------- sidebar ----------------
@@ -215,7 +237,8 @@ namespace Tamewin
             Label Note(string t) => new Label { Text = t, Font = Desc, ForeColor = TextDim, AutoSize = true, Margin = new Padding(0, 0, 0, S(8)) };
 
             content.Controls.Add(Note("A Windows 7-style launcher with your real programs, shortcuts, search and a power button. " +
-                                      "It opens from here. It does not replace the real Start button."));
+                                      "Open it below or press Ctrl+Shift+S any time while Tamewin is running. " +
+                                      "It does not replace the real Start button."));
 
             content.Controls.Add(Section("Style"));
             var glossy = new RadioButton { Text = "Glossy (Aero)", Font = Body, ForeColor = Theme.Text, AutoSize = true, BackColor = Color.Transparent, Checked = startSettings.Style == StartStyle.Glossy, Margin = new Padding(0, S(2), 0, S(2)) };
