@@ -97,45 +97,80 @@ namespace Tamewin
     // Programs found in the Start Menu folders
     // ---------------------------------------------------------------------
 
+    /// <summary>A Start-menu entry: either a program (a .lnk) or a folder with children (like Windows 7's groups).</summary>
     public sealed class ProgramEntry
     {
         public string Name, Path;
         public Image Icon;
+        public bool IsFolder;
+        public List<ProgramEntry> Children;   // set when IsFolder
     }
 
     public static class ProgramScanner
     {
-        /// <summary>All programs from the user and all-users Start Menu folders, de-duplicated by name.</summary>
+        /// <summary>The top level of the Start Menu (programs and folders), like the "All Programs" view in Windows 7.
+        /// Folders keep their children so they can open as a submenu. The user and all-users menus are merged.</summary>
         public static List<ProgramEntry> Scan()
         {
             var roots = new[]
             {
-                Environment.GetFolderPath(Environment.SpecialFolder.CommonStartMenu),
-                Environment.GetFolderPath(Environment.SpecialFolder.StartMenu),
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonStartMenu) ?? "", "Programs"),
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.StartMenu) ?? "", "Programs"),
             };
-            var found = new Dictionary<string, ProgramEntry>(StringComparer.OrdinalIgnoreCase);
+            var merged = new Dictionary<string, ProgramEntry>(StringComparer.OrdinalIgnoreCase);
             foreach (var root in roots)
+                foreach (var node in ReadFolder(root))
+                    Merge(merged, node);
+            return Sort(merged.Values);
+        }
+
+        /// <summary>Flat list of every program (used for search), with folders expanded.</summary>
+        public static List<ProgramEntry> Flatten(List<ProgramEntry> nodes)
+        {
+            var list = new List<ProgramEntry>();
+            void Walk(List<ProgramEntry> ns) { foreach (var n in ns) { if (n.IsFolder) Walk(n.Children); else list.Add(n); } }
+            Walk(nodes);
+            return list.GroupBy(p => p.Name, StringComparer.OrdinalIgnoreCase).Select(g => g.First())
+                       .OrderBy(p => p.Name, StringComparer.OrdinalIgnoreCase).ToList();
+        }
+
+        static List<ProgramEntry> ReadFolder(string dir)
+        {
+            var result = new List<ProgramEntry>();
+            try
             {
-                var programs = Path.Combine(root ?? "", "Programs");
-                if (!Directory.Exists(programs)) continue;
-                foreach (var lnk in SafeFind(programs))
+                foreach (var sub in Directory.GetDirectories(dir))
+                {
+                    var children = ReadFolder(sub);
+                    if (children.Count > 0)
+                        result.Add(new ProgramEntry { Name = Path.GetFileName(sub), Path = sub, IsFolder = true, Children = children });
+                }
+                foreach (var lnk in Directory.GetFiles(dir, "*.lnk"))
                 {
                     var name = Path.GetFileNameWithoutExtension(lnk);
                     if (name.IndexOf("uninstall", StringComparison.OrdinalIgnoreCase) >= 0) continue;
                     if (name.IndexOf("readme", StringComparison.OrdinalIgnoreCase) >= 0) continue;
-                    if (!found.ContainsKey(name)) found[name] = new ProgramEntry { Name = name, Path = lnk };
+                    result.Add(new ProgramEntry { Name = name, Path = lnk });
                 }
             }
-            return found.Values.OrderBy(p => p.Name, StringComparer.OrdinalIgnoreCase).ToList();
-        }
-
-        static IEnumerable<string> SafeFind(string dir)
-        {
-            var result = new List<string>();
-            try { result.AddRange(Directory.GetFiles(dir, "*.lnk")); } catch { }
-            try { foreach (var sub in Directory.GetDirectories(dir)) result.AddRange(SafeFind(sub)); } catch { }
+            catch { }
             return result;
         }
+
+        static void Merge(Dictionary<string, ProgramEntry> into, ProgramEntry node)
+        {
+            if (!into.TryGetValue(node.Name, out var existing)) { into[node.Name] = node; return; }
+            if (existing.IsFolder && node.IsFolder)
+            {
+                var byName = existing.Children.ToDictionary(c => c.Name, StringComparer.OrdinalIgnoreCase);
+                foreach (var c in node.Children) Merge(byName, c);
+                existing.Children = Sort(byName.Values);
+            }
+        }
+
+        // Windows 7 order: folders first, then programs, each alphabetical.
+        static List<ProgramEntry> Sort(IEnumerable<ProgramEntry> items) =>
+            items.OrderByDescending(p => p.IsFolder).ThenBy(p => p.Name, StringComparer.OrdinalIgnoreCase).ToList();
     }
 
     /// <summary>Loads the user's real Windows account picture, so the launcher shows the same photo as the real menu.</summary>
@@ -254,7 +289,8 @@ namespace Tamewin
         public bool KeepOpen;
 
         readonly StartSettings settings;
-        readonly List<ProgramEntry> allPrograms;
+        readonly List<ProgramEntry> topNodes;    // folders + programs, like Windows 7's All Programs
+        readonly List<ProgramEntry> allFlat;     // every program, for search
         readonly GlassPanel progList = new GlassPanel { AutoScroll = true };
         readonly TextBox search = new TextBox();
 
@@ -266,7 +302,8 @@ namespace Tamewin
         public StartMenuForm(StartSettings settings)
         {
             this.settings = settings;
-            allPrograms = ProgramScanner.Scan();
+            topNodes = ProgramScanner.Scan();
+            allFlat = ProgramScanner.Flatten(topNodes);
 
             FormBorderStyle = FormBorderStyle.None;
             ShowInTaskbar = false;
@@ -295,7 +332,9 @@ namespace Tamewin
             search.Focus();
         }
 
-        protected override void OnDeactivate(EventArgs e) { base.OnDeactivate(e); if (!KeepOpen) Close(); }
+        bool menuOpen;         // true while a submenu / power menu is showing, so the launcher doesn't close under it
+        bool allProgramsView;  // false = flat program list (default), true = the folder tree ("All Programs")
+        protected override void OnDeactivate(EventArgs e) { base.OnDeactivate(e); if (!KeepOpen && !menuOpen) Close(); }
         protected override void OnKeyDown(KeyEventArgs e) { if (e.KeyCode == Keys.Escape) Close(); base.OnKeyDown(e); }
 
         void BuildLayout()
@@ -308,7 +347,14 @@ namespace Tamewin
             Controls.Add(progList);
 
             var allProg = new StartAllPrograms { Bounds = new Rectangle(lp.Left + S(3), progList.Bottom + gap, lp.Width - S(6), allProgH) };
-            allProg.Click += (s, e) => { search.Clear(); FillPrograms(null); search.Focus(); };
+            allProg.Click += (s, e) =>
+            {
+                allProgramsView = !allProgramsView;
+                allProg.Back = allProgramsView;
+                allProg.Invalidate();
+                search.Clear();
+                FillPrograms(null);
+            };
             Controls.Add(allProg);
 
             search.BorderStyle = BorderStyle.FixedSingle;
@@ -356,17 +402,20 @@ namespace Tamewin
             foreach (Control c in progList.Controls.Cast<Control>().ToList()) c.Dispose();
             progList.Controls.Clear();
 
-            IEnumerable<ProgramEntry> items = allPrograms;
-            if (!string.IsNullOrWhiteSpace(filter))
-                items = allPrograms.Where(p => p.Name.IndexOf(filter.Trim(), StringComparison.OrdinalIgnoreCase) >= 0);
+            bool searching = !string.IsNullOrWhiteSpace(filter);
+            IEnumerable<ProgramEntry> items =
+                searching ? allFlat.Where(p => p.Name.IndexOf(filter.Trim(), StringComparison.OrdinalIgnoreCase) >= 0) :
+                allProgramsView ? (IEnumerable<ProgramEntry>)topNodes :
+                allFlat;
 
             int y = S(2), w = progList.ClientSize.Width - S(4);
-            foreach (var p in items.Take(200))
+            foreach (var p in items.Take(300))
             {
                 if (p.Icon == null) p.Icon = ShellIcon.For(p.Path, S(20));
                 var item = new StartProgram(p, ProgInk) { Bounds = new Rectangle(S(2), y, w, S(29)) };
                 var captured = p;
-                item.Click += (s, e) => { Launch(captured); Close(); };
+                if (p.IsFolder) item.Click += (s, e) => OpenFolder(captured, item);
+                else item.Click += (s, e) => { Launch(captured); Close(); };
                 progList.Controls.Add(item);
                 y += S(29);
             }
@@ -380,9 +429,42 @@ namespace Tamewin
             try { Process.Start(new ProcessStartInfo(p.Path) { UseShellExecute = true }); } catch { }
         }
 
+        /// <summary>Opens a folder's contents as a cascading submenu to the right, like Windows 7.</summary>
+        void OpenFolder(ProgramEntry folder, Control anchor)
+        {
+            BuildSubmenu(folder.Children).Show(anchor, new Point(anchor.Width - S(6), 0));
+        }
+
+        ContextMenuStrip BuildSubmenu(List<ProgramEntry> nodes)
+        {
+            var menu = new ContextMenuStrip { ShowImageMargin = true };
+            menu.Opened += (s, e) => menuOpen = true;
+            menu.Closed += (s, e) => { menuOpen = false; if (!KeepOpen && !ContainsFocus) Close(); };
+            foreach (var n in nodes)
+            {
+                if (n.Icon == null) n.Icon = ShellIcon.For(n.Path, S(16));
+                if (n.IsFolder)
+                {
+                    var item = new ToolStripMenuItem(n.Name, n.Icon);
+                    foreach (ToolStripItem child in BuildSubmenu(n.Children).Items.Cast<ToolStripItem>().ToArray())
+                        item.DropDownItems.Add(child);
+                    menu.Items.Add(item);
+                }
+                else
+                {
+                    var captured = n;
+                    var item = new ToolStripMenuItem(n.Name, n.Icon, (s, e) => { Launch(captured); Close(); });
+                    menu.Items.Add(item);
+                }
+            }
+            return menu;
+        }
+
         void PowerMenu()
         {
             var menu = new ContextMenuStrip();
+            menu.Opened += (s, e) => menuOpen = true;
+            menu.Closed += (s, e) => menuOpen = false;
             menu.Items.Add("Shut down", null, (s, e) => Power("/s"));
             menu.Items.Add("Restart", null, (s, e) => Power("/r"));
             menu.Items.Add("Sign out", null, (s, e) => Power("/l"));
@@ -476,20 +558,29 @@ namespace Tamewin
             }
             int ic = S(20), pad = S(6);
             if (prog.Icon != null) g.DrawImage(prog.Icon, pad, (Height - ic) / 2, ic, ic);
-            var textR = new Rectangle(pad + ic + S(8), 0, Width - pad - ic - S(10), Height);
+            int rightPad = prog.IsFolder ? S(18) : S(10);
+            var textR = new Rectangle(pad + ic + S(8), 0, Width - pad - ic - S(8) - rightPad, Height);
             TextRenderer.DrawText(g, prog.Name, Theme.Body, textR, ink,
                 TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix | TextFormatFlags.EndEllipsis);
+            if (prog.IsFolder)
+            {
+                var arrowR = new Rectangle(Width - S(16), 0, S(14), Height);
+                TextRenderer.DrawText(g, "▸", new Font("Segoe UI", 9f), arrowR, Color.FromArgb(70, 85, 110),
+                    TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix);
+            }
         }
     }
 
     /// <summary>The "All Programs" row at the bottom of the left pane, with a divider above it.</summary>
     sealed class StartAllPrograms : PaintedControl
     {
+        public bool Back;   // false: "All Programs" (▶); true: "Back" (◀)
         public StartAllPrograms() { Cursor = Cursors.Hand; }
         protected override void OnPaint(PaintEventArgs e)
         {
             var g = e.Graphics;
             if (FindForm() is StartMenuForm m) m.PaintBg(g, this); else g.Clear(BackColor);
+            g.SmoothingMode = SmoothingMode.AntiAlias;
             using (var pen = new Pen(Color.FromArgb(205, 215, 228))) g.DrawLine(pen, S(2), 0, Width - S(2), 0);
             if (Hover)
                 using (var b = new SolidBrush(Color.FromArgb(220, 232, 246)))
@@ -498,10 +589,10 @@ namespace Tamewin
             var box = new Rectangle(S(6), (Height - S(16)) / 2, S(16), S(16));
             using (var b = new LinearGradientBrush(box, Color.FromArgb(120, 170, 90), Color.FromArgb(70, 120, 50), 90f))
                 g.FillRectangle(b, box);
-            TextRenderer.DrawText(g, "▶", new Font("Segoe UI", 7f), box, Color.White,
+            TextRenderer.DrawText(g, Back ? "◀" : "▶", new Font("Segoe UI", 7f), box, Color.White,
                 TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix);
             var tr = new Rectangle(S(28), 0, Width - S(30), Height);
-            TextRenderer.DrawText(g, "All Programs", Theme.BodyBold, tr, Color.FromArgb(28, 42, 64),
+            TextRenderer.DrawText(g, Back ? "Back" : "All Programs", Theme.BodyBold, tr, Color.FromArgb(28, 42, 64),
                 TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix);
         }
     }
