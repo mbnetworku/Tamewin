@@ -5,9 +5,9 @@ using System.Drawing.Drawing2D;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
-using static Fastyourpc.Theme;
+using static Tamewin.Theme;
 
-namespace Fastyourpc
+namespace Tamewin
 {
     /// <summary>Base for the custom-drawn controls: double-buffered, tracks hover and press.</summary>
     public class PaintedControl : Control

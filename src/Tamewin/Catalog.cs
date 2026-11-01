@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 
-namespace Fastyourpc
+namespace Tamewin
 {
     /// <summary>
     /// Every option the app offers. TO ADD AN OPTION: add one T(...) line below.

@@ -1,0 +1,33 @@
+Tamewin
+Copyright (c) 2026 mbnetworku
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+---------------------------------------------------------------------------
+Additional notes
+
+- Tamewin changes Windows, Office and Edge settings and can uninstall apps on
+  the computer it runs on. You run it at your own risk. Always keep the backup
+  file it creates (%LOCALAPPDATA%\Tamewin\backup.tsv) so changes can be undone.
+- "Windows", "Microsoft", "Office" and "Edge" are trademarks of Microsoft
+  Corporation. Tamewin is not affiliated with, endorsed by, or sponsored by
+  Microsoft. These names are used only to describe what the tool changes.
+- Third-party component: Microsoft.Windows.SDK.Contracts (NuGet), used to list
+  and remove Microsoft Store apps. It is licensed by Microsoft under its own
+  terms and is not covered by the license above.

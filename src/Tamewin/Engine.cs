@@ -5,7 +5,7 @@ using System.Linq;
 using System.Security.Principal;
 using Microsoft.Win32;
 
-namespace Fastyourpc
+namespace Tamewin
 {
     public enum TweakState { NotApplied, Partly, Applied }
 
@@ -23,7 +23,7 @@ namespace Fastyourpc
         }
 
         public static string DataFolder =>
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Fastyourpc");
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Tamewin");
 
         public bool TestMode => testRoot != null;
 
@@ -237,7 +237,7 @@ namespace Fastyourpc
         public static void Save(string path, List<Entry> entries)
         {
             Directory.CreateDirectory(Path.GetDirectoryName(path));
-            var lines = new List<string> { "# Fastyourpc backup: original values, used by Revert. Don't edit." };
+            var lines = new List<string> { "# Tamewin backup: original values, used by Revert. Don't edit." };
             lines.AddRange(entries.Select(e => string.Join("\t", new[]
             {
                 e.TweakId, e.Hive.ToString(), e.Key, e.Name, e.Existed ? "1" : "0", e.Kind.ToString(), e.Value, e.CreatedKey,

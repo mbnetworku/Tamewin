@@ -1,8 +1,8 @@
 # Technical Notes
 
-# Part 1: Fastyourpc.exe
+# Part 1: Tamewin.exe
 
-## Source layout (`src/Fastyourpc`)
+## Source layout (`src/Tamewin`)
 | File | What it does |
 |---|---|
 | `Catalog.cs` | **Every privacy/settings option.** To add one, add a `T(group, id, title, info, ops...)` line. |
@@ -21,10 +21,10 @@ T(Tips, "my_new_id", "Turn off something", "One sentence: what changes for the u
 // LM(...) for HKLM (needs admin). Value: int = REG_DWORD, string = REG_SZ, null = delete the value.
 // Optional: .Needs("Restart the PC ...")  .Warn("shown before applying")  .Optional()  .ConflictsWith("other_id")
 ```
-Ids must be unique and never reused, because backups are stored by id. Then run `.\build.ps1` and `tests\Test-Fastyourpc.ps1`.
+Ids must be unique and never reused, because backups are stored by id. Then run `.\build.ps1` and `tests\Test-Tamewin.ps1`.
 
 ## How apply / revert work
-- **Apply:** before a tweak's first apply, each of its values is saved to `%LOCALAPPDATA%\Fastyourpc\backup.tsv`: whether it existed, its type and value, and the highest key that didn't exist yet. Then the new values are written. Applying again keeps the original backup.
+- **Apply:** before a tweak's first apply, each of its values is saved to `%LOCALAPPDATA%\Tamewin\backup.tsv`: whether it existed, its type and value, and the highest key that didn't exist yet. Then the new values are written. Applying again keeps the original backup.
 - **Revert:** writes the saved values back, deletes values that didn't exist, and removes keys the app created (only if they're empty). If there's no backup (the setting was changed by something else), it resets to Windows' default.
 - **Conflicts:** applying `wpp_off` first reverts `wpp_on`, and the other way round.
 - **Status:** *Applied* = every value matches, *Partly* = some do, *Not applied* = none do.
@@ -47,13 +47,13 @@ Revert restores every value from the backup, or deletes it if it didn't exist be
 
 ## Apps tab
 - **Scan:** `PackageManager.FindPackagesForUser("")` (current user). Each known app is matched by package name (`*` wildcard) and shown as Installed or Not installed. *Other installed apps* = Store- or developer-signed packages that aren't frameworks, resources or bundles, and aren't in the list.
-- **Uninstall:** `PackageManager.RemovePackageAsync(fullName)` for the current user. Removed apps are logged to `%LOCALAPPDATA%\Fastyourpc\removed-apps.tsv`, so *Get from Store* can open the exact Store page.
+- **Uninstall:** `PackageManager.RemovePackageAsync(fullName)` for the current user. Removed apps are logged to `%LOCALAPPDATA%\Tamewin\removed-apps.tsv`, so *Get from Store* can open the exact Store page.
 - It doesn't remove *provisioned* copies (apps preinstalled for new user accounts). That needs DISM and Administrator.
 - Levels: **Safe** = nothing depends on it. **Caution** = a Windows feature stops working. **Critical** = Store, Windows Security, sign-in, runtimes, etc.; ticking one shows a warning you must confirm.
 
 ## Command line
 ```
-Fastyourpc.exe --list | --apply <ids|recommended> | --revert <ids|all> | --apps | --help
+Tamewin.exe --list | --apply <ids|recommended> | --revert <ids|all> | --apps | --help
   --test-root <key>   redirect all registry writes to HKCU\<key> (testing)
   --backup <file>     use a different backup file
   --theme light|dark  force a theme
@@ -63,7 +63,7 @@ The README screenshots are made with `--test-root` plus `--screenshot`, so they 
 Exit codes: 0 = OK, 1 = some items failed or were skipped, 2 = bad arguments.
 
 ## Testing
-`tests\Test-Fastyourpc.ps1` runs the built EXE with `--test-root Software\FastyourpcTest` and a temporary backup, so no real setting changes. It covers apply, revert, restoring a pre-existing value, cleaning up created keys, conflicts, optional items and a read-only app scan. It never uninstalls anything.
+`tests\Test-Tamewin.ps1` runs the built EXE with `--test-root Software\TamewinTest` and a temporary backup, so no real setting changes. It covers apply, revert, restoring a pre-existing value, cleaning up created keys, conflicts, optional items and a read-only app scan. It never uninstalls anything.
 
 ## Antivirus and false positives
 The app is written to look like what it is:
@@ -81,7 +81,7 @@ Never "fix" a detection by obfuscating or packing the EXE. That's exactly what m
 
 # Part 2: PowerShell scripts
 
-Start with `.\Fastyourpc.ps1` (main menu), or run each script directly.
+Start with `.\Tamewin.ps1` (main menu), or run each script directly.
 
 ## Privacy — how to run
 
@@ -192,9 +192,9 @@ Key: `HKLM\SOFTWARE\Policies\Microsoft\Windows NT\Printers\WPP` (needs Administr
 - Restart the PC after any change.
 - Turning it **ON** removes printers that aren't Mopria-compatible. After turning it off, add them again under Settings → Printers & scanners.
 - These values come from community guides, which don't fully agree, not from official Microsoft documentation. Microsoft's supported ways are Group Policy (Computer Configuration → Administrative Templates → Printers → *Configure Windows protected print*) and the Settings toggle. Menu option 4 opens that Settings page (`ms-settings:printers`).
-- The script refuses `-On`, `-Off` and `-Default` without Administrator. `Fastyourpc.ps1` offers to reopen it in an admin window.
+- The script refuses `-On`, `-Off` and `-Default` without Administrator. `Tamewin.ps1` offers to reopen it in an admin window.
 
-## Main menu (`Fastyourpc.ps1`)
+## Main menu (`Tamewin.ps1`)
 
 A loop that runs `Apply-Privacy.ps1`, `Revert-Privacy.ps1`, `Set-ClassicMenu.ps1` or `Set-ProtectedPrint.ps1`. For protected print, if the current window isn't admin, it starts an elevated PowerShell (UAC prompt) running that script.
 

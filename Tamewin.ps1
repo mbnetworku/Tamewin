@@ -1,6 +1,6 @@
 # Main menu: one place to reach every tool in this folder.
 #
-#   .\Fastyourpc.ps1
+#   .\Tamewin.ps1
 #
 # Each option runs the matching script, which asks its own questions.
 # Option 4 (protected print) needs Administrator; you'll be offered to reopen it as admin.
@@ -12,7 +12,7 @@ function Test-Admin {
 
 while ($true) {
     Write-Host ""
-    Write-Host "=== Fastyourpc ==="
+    Write-Host "=== Tamewin ==="
     Write-Host "  1) Privacy: turn off data sharing with Microsoft"
     Write-Host "  2) Privacy: restore original settings"
     Write-Host "  3) Classic right-click menu: on / off"

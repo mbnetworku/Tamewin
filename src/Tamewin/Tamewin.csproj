@@ -6,9 +6,10 @@
     <TargetFramework>net48</TargetFramework>
     <LangVersion>latest</LangVersion>
     <Nullable>disable</Nullable>
-    <AssemblyName>Fastyourpc</AssemblyName>
-    <RootNamespace>Fastyourpc</RootNamespace>
+    <AssemblyName>Tamewin</AssemblyName>
+    <RootNamespace>Tamewin</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>app.ico</ApplicationIcon>
     <!-- 64-bit when possible, so HKLM isn't redirected to WOW6432Node. -->
     <PlatformTarget>AnyCPU</PlatformTarget>
     <Prefer32Bit>false</Prefer32Bit>
@@ -18,10 +19,10 @@
 
     <Version>1.0.0</Version>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
-    <Product>Fastyourpc</Product>
-    <AssemblyTitle>Fastyourpc</AssemblyTitle>
+    <Product>Tamewin</Product>
+    <AssemblyTitle>Tamewin</AssemblyTitle>
     <Description>Windows privacy settings, tweaks and app remover, with undo</Description>
-    <Company>Fastyourpc (open source)</Company>
+    <Company>Tamewin (open source)</Company>
     <Copyright>Open source - see repository</Copyright>
   </PropertyGroup>
 

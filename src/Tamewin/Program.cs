@@ -3,7 +3,7 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
-namespace Fastyourpc
+namespace Tamewin
 {
     static class Program
     {
@@ -11,19 +11,19 @@ namespace Fastyourpc
         static extern bool AttachConsole(int processId);
 
         const string Help =
-@"Fastyourpc - Windows privacy settings, tweaks and app remover, with undo.
+@"Tamewin - Windows privacy settings, tweaks and app remover, with undo.
 
 Run with no arguments to open the window.
 
 Command line:
-  Fastyourpc.exe --list                  show every option, its id and status
-  Fastyourpc.exe --apply  <ids|recommended>   apply options (comma-separated ids)
-  Fastyourpc.exe --revert <ids|all>      put options back the way they were
-  Fastyourpc.exe --apps                  scan apps: installed / not installed
+  Tamewin.exe --list                  show every option, its id and status
+  Tamewin.exe --apply  <ids|recommended>   apply options (comma-separated ids)
+  Tamewin.exe --revert <ids|all>      put options back the way they were
+  Tamewin.exe --apps                  scan apps: installed / not installed
 
 Testing options:
   --test-root <key>   redirect every registry change to HKCU\<key> (nothing real is touched)
-  --backup <file>     use this backup file instead of %LOCALAPPDATA%\Fastyourpc\backup.tsv
+  --backup <file>     use this backup file instead of %LOCALAPPDATA%\Tamewin\backup.tsv
   --theme light|dark  force a theme instead of following Windows
   --screenshot <file.png> <privacy|features|apps|log>   save a picture of a page and exit";
 

@@ -1,6 +1,13 @@
-# Fastyourpc
+<img src="docs/logo.png" width="96" align="left" alt="Tamewin logo">
 
-Windows 10/11 tools, available as one portable **`Fastyourpc.exe`** or as PowerShell scripts:
+# Tamewin
+
+Tame Windows: turn off the data it sends to Microsoft, remove bloatware, and
+block updates — all reversible with one click.
+
+<br clear="left">
+
+Windows 10/11 tools, available as one portable **`Tamewin.exe`** or as PowerShell scripts:
 
 - **Privacy & settings**: turn off Windows, Office and Edge data sharing, telemetry and diagnostic data, tips and ads. Undo puts back exactly what was there before.
 - **Apps (bloatware)**: scans which preinstalled apps are installed and which aren't, rates each one (safe / think first / critical), says what stops working if you remove it, and uninstalls the ones you pick.
@@ -9,9 +16,9 @@ Windows 10/11 tools, available as one portable **`Fastyourpc.exe`** or as PowerS
 
 Nothing touches your Microsoft account or sign-in.
 
-## Fastyourpc.exe (recommended)
+## Tamewin.exe (recommended)
 
-Download `Fastyourpc.exe` from the Releases page and double-click it. Nothing to install: it uses .NET Framework 4.8, which is built into Windows 10 and 11.
+Download `Tamewin.exe` from the Releases page and double-click it. Nothing to install: it uses .NET Framework 4.8, which is built into Windows 10 and 11.
 
 ![Privacy page](docs/privacy-light.png)
 
@@ -35,13 +42,13 @@ The sidebar has four pages:
 
 Each app's card says what stops working if you remove it. Uninstall is for your user account. To get an app back, click it and choose **Get from Store**.
 
-**Activity.** A log of every change in this session, and a button that opens `%LOCALAPPDATA%\Fastyourpc`, where backups and the list of removed apps are kept.
+**Activity.** A log of every change in this session, and a button that opens `%LOCALAPPDATA%\Tamewin`, where backups and the list of removed apps are kept.
 
-Command line: `Fastyourpc.exe --list`, `--apply ad_id,tips`, `--apply recommended`, `--revert all`, `--apps`. Run `Fastyourpc.exe --help` for details.
+Command line: `Tamewin.exe --list`, `--apply ad_id,tips`, `--apply recommended`, `--revert all`, `--apps`. Run `Tamewin.exe --help` for details.
 
 ### Is it safe? Antivirus
 - **Open source:** everything is in `src/`. No network access, no hidden PowerShell, no packing or obfuscation. Registry changes use .NET's registry API, and apps are removed with Windows' own PackageManager API.
-- Each release lists the EXE's **SHA-256**. Check it with `Get-FileHash Fastyourpc.exe`.
+- Each release lists the EXE's **SHA-256**. Check it with `Get-FileHash Tamewin.exe`.
 - **Not code-signed yet.** Windows SmartScreen may say "unknown publisher" (click *More info → Run anyway*). Some antivirus products flag *any* unsigned tool that changes privacy settings or removes apps. If yours does, please report it as a false positive. See [TECHNICAL.md](TECHNICAL.md#antivirus-and-false-positives).
 - Build it yourself: `.\build.ps1` (needs the .NET SDK).
 
@@ -52,11 +59,11 @@ The original scripts still work and don't need the EXE.
 Download or clone this repository, open PowerShell in its folder, then:
 
 ```powershell
-.\Fastyourpc.ps1
+.\Tamewin.ps1
 ```
 
 ```
-=== Fastyourpc ===
+=== Tamewin ===
   1) Privacy: turn off data sharing with Microsoft
   2) Privacy: restore original settings
   3) Classic right-click menu: on / off
@@ -126,3 +133,14 @@ Current user only, no admin needed.
 Needs **Run as Administrator** for on/off/default. Restart the PC afterwards. The registry values aren't officially documented by Microsoft. If a change doesn't take effect, choose **4) Open printer settings** in the menu and use the toggle under **Settings → Bluetooth & devices → Printers & scanners**.
 
 See [TECHNICAL.md](TECHNICAL.md) for exactly what each tool changes.
+
+## More
+
+- [TECHNICAL.md](TECHNICAL.md) — what every option changes, key by key.
+- [ERROR-LESSONS.md](ERROR-LESSONS.md) — problems hit while building this, and their fixes.
+- [COPYRIGHT](COPYRIGHT) — licence (MIT) and trademark notes.
+
+## Licence
+
+MIT. See [COPYRIGHT](COPYRIGHT). "Windows", "Microsoft", "Office" and "Edge" are
+trademarks of Microsoft Corporation; Tamewin is not affiliated with Microsoft.

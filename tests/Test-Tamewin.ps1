@@ -1,10 +1,10 @@
-# Tests dist\Fastyourpc.exe without touching real settings: every registry change is redirected
-# to HKCU\Software\FastyourpcTest (removed at the end) and a temporary backup file is used.
+# Tests dist\Tamewin.exe without touching real settings: every registry change is redirected
+# to HKCU\Software\TamewinTest (removed at the end) and a temporary backup file is used.
 # The app scan (--apps) is read-only. Nothing is uninstalled.
 $ErrorActionPreference = 'Stop'
-$exe    = Join-Path $PSScriptRoot '..\dist\Fastyourpc.exe' | Resolve-Path
-$tmp    = Join-Path ([IO.Path]::GetTempPath()) 'FastyourpcTest'
-$root   = 'Software\FastyourpcTest'
+$exe    = Join-Path $PSScriptRoot '..\dist\Tamewin.exe' | Resolve-Path
+$tmp    = Join-Path ([IO.Path]::GetTempPath()) 'TamewinTest'
+$root   = 'Software\TamewinTest'
 $backup = Join-Path $tmp 'backup.tsv'
 New-Item -ItemType Directory -Path $tmp -Force | Out-Null
 Remove-Item "HKCU:\$root" -Recurse -Force -ErrorAction SilentlyContinue

@@ -1,7 +1,7 @@
 using System;
 using System.Linq;
 
-namespace Fastyourpc
+namespace Tamewin
 {
     public enum Hive { CU, LM }
 

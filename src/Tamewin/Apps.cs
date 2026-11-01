@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 using Windows.ApplicationModel;
 using Windows.Management.Deployment;
 
-namespace Fastyourpc
+namespace Tamewin
 {
     public enum AppLevel { Safe, Caution, Critical, Other }
 

@@ -5,9 +5,9 @@ using System.Drawing;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Forms;
-using static Fastyourpc.Theme;
+using static Tamewin.Theme;
 
-namespace Fastyourpc
+namespace Tamewin
 {
     /// <summary>Main window: sidebar on the left, one page shown at a time on the right.</summary>
     public sealed class MainForm : Form
@@ -39,7 +39,8 @@ namespace Fastyourpc
             Font = Body;
             BackColor = Window;
             ForeColor = Theme.Text;
-            Text = "Fastyourpc" + (engine.TestMode && showTestLabel ? "  [TEST MODE]" : "");
+            Text = "Tamewin" + (engine.TestMode && showTestLabel ? "  [TEST MODE]" : "");
+            try { Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath); } catch { /* no icon: use the default */ }
             Size = new Size(S(1160), S(800));
             MinimumSize = new Size(S(860), S(580));
             StartPosition = FormStartPosition.CenterScreen;
@@ -96,18 +97,27 @@ namespace Fastyourpc
             bar.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             bar.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
+            var logo = new PictureBox
+            {
+                Size = new Size(S(28), S(28)), SizeMode = PictureBoxSizeMode.Zoom,
+                Margin = new Padding(S(4), S(1), S(8), 0), BackColor = Color.Transparent,
+            };
+            try { logo.Image = Icon?.ToBitmap(); } catch { /* no icon: show text only */ }
             var title = new Label
             {
-                AutoSize = true, Text = "Fastyourpc", Font = AppTitle, ForeColor = Theme.Text,
-                Margin = new Padding(S(6), 0, 0, S(2)),
+                AutoSize = true, Text = "Tamewin", Font = AppTitle, ForeColor = Theme.Text,
+                Margin = new Padding(0, S(2), 0, 0),
             };
+            var brand = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = new Padding(S(2), 0, 0, S(2)) };
+            brand.Controls.Add(logo);
+            brand.Controls.Add(title);
             var version = new Label
             {
                 AutoSize = true, Font = Small, ForeColor = TextDim, Margin = new Padding(S(7), 0, 0, S(22)),
                 Text = "Version " + Application.ProductVersion + (engine.TestMode && showTestLabel ? "  -  TEST MODE" : ""),
             };
             var head = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.TopDown, WrapContents = false, Margin = Padding.Empty };
-            head.Controls.Add(title);
+            head.Controls.Add(brand);
             head.Controls.Add(version);
             bar.Controls.Add(head, 0, 0);
 
@@ -207,7 +217,7 @@ namespace Fastyourpc
 
         void RestartExplorer()
         {
-            if (MessageBox.Show(this, "Restart Explorer now? Open File Explorer windows will close.", "Fastyourpc",
+            if (MessageBox.Show(this, "Restart Explorer now? Open File Explorer windows will close.", "Tamewin",
                     MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
             foreach (var p in Process.GetProcessesByName("explorer")) { try { p.Kill(); p.WaitForExit(5000); } catch { } }
             System.Threading.Thread.Sleep(1500);
@@ -302,13 +312,13 @@ namespace Fastyourpc
             if (chosen.Count == 0) return;
             if (apply && chosen.Any(t => t.Id == "wpp_on") && chosen.Any(t => t.Id == "wpp_off"))
             {
-                MessageBox.Show(FindForm(), "Choose either protected print ON or OFF, not both.", "Fastyourpc",
+                MessageBox.Show(FindForm(), "Choose either protected print ON or OFF, not both.", "Tamewin",
                     MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
             var verb = apply ? "Apply" : "Revert";
             if (MessageBox.Show(FindForm(), verb + " " + chosen.Count + " setting(s)?\n\n" +
-                    string.Join("\n", chosen.Select(t => "-  " + t.Title)), "Fastyourpc",
+                    string.Join("\n", chosen.Select(t => "-  " + t.Title)), "Tamewin",
                     MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
 
             foreach (var t in chosen)
@@ -319,7 +329,7 @@ namespace Fastyourpc
             var notes = chosen.Where(t => t.Note != null).Select(t => t.Note).Distinct().ToList();
             log(verb + " finished: " + chosen.Count + " setting(s)." + (notes.Count > 0 ? " " + string.Join(". ", notes) + "." : ""));
             if (notes.Count > 0)
-                MessageBox.Show(FindForm(), "Done.\n\n" + string.Join("\n", notes), "Fastyourpc", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show(FindForm(), "Done.\n\n" + string.Join("\n", notes), "Tamewin", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
     }
 

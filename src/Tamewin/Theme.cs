@@ -4,7 +4,7 @@ using System.Drawing.Drawing2D;
 using System.Runtime.InteropServices;
 using Microsoft.Win32;
 
-namespace Fastyourpc
+namespace Tamewin
 {
     /// <summary>A small coloured label drawn on a row, e.g. "Applied" or "Critical".</summary>
     public struct Pill
